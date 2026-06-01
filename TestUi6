@@ -1212,10 +1212,9 @@ function sectiontable:Dropdown(Info)
     Info.Callback = Info.Callback or function() end
     Info.ChangeTextOnPick = Info.ChangeTextOnPick or false
     Info.MaxVisibleItems = Info.MaxVisibleItems or 7
-    Info.Multi = Info.Multi or false
 
     local insidedropdown = {
-        Selected = {},
+        Selected = nil,
         Elements = {}
     }
 
@@ -1244,8 +1243,8 @@ function sectiontable:Dropdown(Info)
     dropdownText.TextXAlignment = Enum.TextXAlignment.Left
     dropdownText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownText.BackgroundTransparency = 1
-    dropdownText.Position = UDim2.new(0.0234, 0, 0, 0)
-    dropdownText.Size = UDim2.new(0, 167, 0, 24)
+    dropdownText.Position = UDim2.new(0, 8, 0, 0) -- Adjusted for better look
+    dropdownText.Size = UDim2.new(0, 140, 0, 24)
     dropdownText.Parent = dropdownFrame
 
     local dropdownTextButton = Instance.new("TextButton")
@@ -1256,7 +1255,7 @@ function sectiontable:Dropdown(Info)
     dropdownTextButton.TextSize = 14
     dropdownTextButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownTextButton.BackgroundTransparency = 1
-    dropdownTextButton.Size = UDim2.new(0, 171, 0, 24)
+    dropdownTextButton.Size = UDim2.new(1, 0, 1, 0)
     dropdownTextButton.Parent = dropdownFrame
 
     local dropdownUIStroke = Instance.new("UIStroke")
@@ -1271,11 +1270,11 @@ function sectiontable:Dropdown(Info)
     dropdownIcon.Active = true
     dropdownIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownIcon.BackgroundTransparency = 1
-    dropdownIcon.Position = UDim2.new(0, 155, 0, 5)
+    dropdownIcon.Position = UDim2.new(1, -20, 0, 4) -- Positioned to the right
     dropdownIcon.Rotation = 90
-    dropdownIcon.Size = UDim2.new(0, 17, 0, 17)
+    dropdownIcon.Size = UDim2.new(0, 16, 0, 16)
     dropdownIcon.ZIndex = 2
-    dropdownIcon.Parent = dropdown
+    dropdownIcon.Parent = dropdownFrame -- Parented to frame for consistency
 
     local dropdownContainer = Instance.new("Frame")
     dropdownContainer.Name = "dropdownContainer"
@@ -1320,23 +1319,14 @@ function sectiontable:Dropdown(Info)
     dropdownUIListLayout.Parent = dropdownScrollingFrame
 
     local function UpdateVisuals()
-        local selectedCount = 0
-        for _ in pairs(insidedropdown.Selected) do selectedCount = selectedCount + 1 end
-
-        if Info.ChangeTextOnPick then
-            if selectedCount == 0 then
-                dropdownText.Text = Info.Text
-            elseif selectedCount == 1 then
-                local val
-                for k in pairs(insidedropdown.Selected) do val = k break end
-                dropdownText.Text = Info.Text .. ": " .. tostring(val)
-            else
-                dropdownText.Text = Info.Text .. ": Mult"
-            end
+        if Info.ChangeTextOnPick and insidedropdown.Selected then
+            dropdownText.Text = Info.Text .. ": " .. tostring(insidedropdown.Selected)
+        else
+            dropdownText.Text = Info.Text
         end
 
         for name, element in pairs(insidedropdown.Elements) do
-            local isSelected = insidedropdown.Selected[name] ~= nil
+            local isSelected = insidedropdown.Selected == name
             TweenService:Create(element.dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
                 TextColor3 = isSelected and Theme.Highlight or Theme.ItemText
             }):Play()
@@ -1399,7 +1389,6 @@ function sectiontable:Dropdown(Info)
         local targetDropdownFrameSize = open and UDim2.new(0, 171, 0, newHeight + 24) or UDim2.new(0, 171, 0, 24)
         local targetDropdownContainerSize = UDim2.new(0, 171, 0, newHeight)
         local targetIconRotation = open and -90 or 90
-        local targetIconPosition = open and UDim2.new(0, 156, 0, 5) or UDim2.new(0, 155, 0, 5)
 
         if tween then
             TweenService:Create(section, tweenInfo, {Size = targetSectionSize}):Play()
@@ -1418,8 +1407,6 @@ function sectiontable:Dropdown(Info)
             dropdownContainer.Size = targetDropdownContainerSize
             dropdownIcon.Rotation = targetIconRotation
         end
-
-        dropdownIcon.Position = targetIconPosition
     end
 
     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -1457,7 +1444,7 @@ function sectiontable:Dropdown(Info)
         dropdownElementText.TextXAlignment = Enum.TextXAlignment.Left
         dropdownElementText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         dropdownElementText.BackgroundTransparency = 1
-        dropdownElementText.Position = UDim2.new(0.0234, 0, 0, 0)
+        dropdownElementText.Position = UDim2.new(0.05, 0, 0, 0)
         dropdownElementText.Size = UDim2.new(1, -10, 0, DropdownItemHeight)
         dropdownElementText.Parent = dropdownElement
 
@@ -1469,7 +1456,7 @@ function sectiontable:Dropdown(Info)
         dropdownElementButton.TextSize = 14
         dropdownElementButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         dropdownElementButton.BackgroundTransparency = 1
-        dropdownElementButton.Size = UDim2.new(1, 0, 0, DropdownItemHeight)
+        dropdownElementButton.Size = UDim2.new(1, 0, 1, 0)
         dropdownElementButton.Parent = dropdownElement
 
         insidedropdown.Elements[str] = {
@@ -1478,40 +1465,27 @@ function sectiontable:Dropdown(Info)
         }
 
         dropdownElement.MouseEnter:Connect(function()
-            if not insidedropdown.Selected[str] then
+            if insidedropdown.Selected ~= str then
                 TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.Highlight}):Play()
             end
         end)
 
         dropdownElement.MouseLeave:Connect(function()
-            if not insidedropdown.Selected[str] then
+            if insidedropdown.Selected ~= str then
                 TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.ItemText}):Play()
             end
         end)
 
         dropdownElementButton.MouseButton1Click:Connect(function()
-            if Info.Multi then
-                if insidedropdown.Selected[str] then
-                    insidedropdown.Selected[str] = nil
-                else
-                    insidedropdown.Selected[str] = true
-                end
-                
-                local selectedList = {}
-                for k in pairs(insidedropdown.Selected) do table.insert(selectedList, k) end
-                task.spawn(Info.Callback, selectedList)
-                if Info.Flag then library.Flags[Info.Flag] = selectedList end
-            else
-                insidedropdown.Selected = {[str] = true}
-                task.spawn(Info.Callback, str)
-                if Info.Flag then library.Flags[Info.Flag] = str end
-                
-                DropdownOpened = false
-                SearchBox.Visible = false
-                ResizeDropdown(false, true)
-                task.wait(.1)
-                containerHolder.ClipsDescendants = true
-            end
+            insidedropdown.Selected = str
+            task.spawn(Info.Callback, str)
+            if Info.Flag then library.Flags[Info.Flag] = str end
+            
+            DropdownOpened = false
+            SearchBox.Visible = false
+            ResizeDropdown(false, true)
+            task.wait(.1)
+            containerHolder.ClipsDescendants = true
             
             UpdateVisuals()
             
@@ -1532,7 +1506,9 @@ function sectiontable:Dropdown(Info)
         if insidedropdown.Elements[opt] then
             insidedropdown.Elements[opt].Frame:Destroy()
             insidedropdown.Elements[opt] = nil
-            insidedropdown.Selected[opt] = nil
+            if insidedropdown.Selected == opt then
+                insidedropdown.Selected = nil
+            end
             
             if DropdownOpened then
                 ResizeDropdown(true, true)
@@ -1548,7 +1524,7 @@ function sectiontable:Dropdown(Info)
             v.Frame:Destroy()
         end
         insidedropdown.Elements = {}
-        insidedropdown.Selected = {}
+        insidedropdown.Selected = nil
         
         if DropdownOpened then
             ResizeDropdown(true, true)
@@ -1567,12 +1543,7 @@ function sectiontable:Dropdown(Info)
     end
 
     function insidedropdown:Set(val)
-        if type(val) == "table" then
-            insidedropdown.Selected = {}
-            for _, v in ipairs(val) do insidedropdown.Selected[v] = true end
-        else
-            insidedropdown.Selected = {[val] = true}
-        end
+        insidedropdown.Selected = val
         UpdateVisuals()
     end
 
