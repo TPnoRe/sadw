@@ -1326,6 +1326,7 @@ function sectiontable:Dropdown(Info)
 
         for name, element in pairs(insidedropdown.Elements) do
             local isSelected = insidedropdown.Selected == name
+            -- Lock highlight color ONLY to selected item
             TweenService:Create(element.dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
                 TextColor3 = isSelected and Theme.Highlight or Theme.ItemText
             }):Play()
@@ -1428,8 +1429,9 @@ function sectiontable:Dropdown(Info)
     function insidedropdown:Add(str)
         local dropdownElement = Instance.new("Frame")
         dropdownElement.Name = "dropdownElement"
-        dropdownElement.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        dropdownElement.BackgroundTransparency = 1
+        dropdownElement.BackgroundColor3 = Theme.HoverItemFrame -- Use Theme's hover color
+        dropdownElement.BackgroundTransparency = 1 -- Default hidden
+        dropdownElement.BorderSizePixel = 0
         dropdownElement.Size = UDim2.new(1, -4, 0, DropdownItemHeight)
         dropdownElement.ZIndex = 2
         dropdownElement.Parent = dropdownScrollingFrame
@@ -1464,17 +1466,13 @@ function sectiontable:Dropdown(Info)
         }
 
         dropdownElement.MouseEnter:Connect(function()
-            if insidedropdown.Selected ~= str then
-                -- Hover color (Bright white)
-                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-            end
+            -- Show hover frame (background) instead of changing text color
+            TweenService:Create(dropdownElement, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundTransparency = 0}):Play()
         end)
 
         dropdownElement.MouseLeave:Connect(function()
-            if insidedropdown.Selected ~= str then
-                -- Return to normal text color
-                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.ItemText}):Play()
-            end
+            -- Hide hover frame
+            TweenService:Create(dropdownElement, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundTransparency = 1}):Play()
         end)
 
         dropdownElementButton.MouseButton1Click:Connect(function()
