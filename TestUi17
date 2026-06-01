@@ -12,7 +12,7 @@ local Themes = {
         TabContainer = Color3.fromRGB(25, 25, 30),
         Lines = Color3.fromRGB(50, 50, 55),
         HoverTabFrame = Color3.fromRGB(53, 53, 57),
-        ItemUIStroke = Color3.fromRGB(35, 35, 40),
+        ItemUIStroke = Color3.fromRGB(41, 41, 50),
         TabFrame = Color3.fromRGB(35, 35, 40),
         SectionFrame = Color3.fromRGB(30, 30, 35),
         TabText = Color3.fromRGB(237, 237, 237),
@@ -1318,27 +1318,27 @@ function sectiontable:Dropdown(Info)
     dropdownUIListLayout.Parent = dropdownScrollingFrame
 
     local function UpdateVisuals()
+        -- Update the main dropdown text to the selected item
         if insidedropdown.Selected then
             dropdownText.Text = tostring(insidedropdown.Selected)
         else
             dropdownText.Text = Info.Text
         end
 
+        -- Update ONLY the text color of the elements based on selection
         for name, element in pairs(insidedropdown.Elements) do
             local isSelected = insidedropdown.Selected == name
-            TweenService:Create(element.dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
-                TextColor3 = isSelected and Theme.Highlight or Theme.ItemText
-            }):Play()
+            element.dropdownElementText.TextColor3 = isSelected and Theme.Highlight or Theme.ItemText
         end
     end
 
+    -- Main Dropdown Button Hover (Only affects the button itself)
     dropdownFrame.MouseEnter:Connect(function()
         TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
     end)
 
     dropdownFrame.MouseLeave:Connect(function()
         TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
-        TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
     end)
 
     dropdownTextButton.MouseButton1Down:Connect(function()
@@ -1446,7 +1446,7 @@ function sectiontable:Dropdown(Info)
         dropdownElementText.BackgroundTransparency = 1
         dropdownElementText.Position = UDim2.new(0.05, 0, 0, 0)
         dropdownElementText.Size = UDim2.new(1, -10, 0, DropdownItemHeight)
-        dropdownElementText.ZIndex = 4 -- Set text above hover frame
+        dropdownElementText.ZIndex = 4
         dropdownElementText.Parent = dropdownElement
 
         local dropdownElementButton = Instance.new("TextButton")
@@ -1458,7 +1458,7 @@ function sectiontable:Dropdown(Info)
         dropdownElementButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         dropdownElementButton.BackgroundTransparency = 1
         dropdownElementButton.Size = UDim2.new(1, 0, 1, 0)
-        dropdownElementButton.ZIndex = 5 -- Highest to capture clicks
+        dropdownElementButton.ZIndex = 5
         dropdownElementButton.Parent = dropdownElement
 
         insidedropdown.Elements[str] = {
@@ -1466,6 +1466,7 @@ function sectiontable:Dropdown(Info)
             dropdownElementText = dropdownElementText
         }
 
+        -- Element Hover (Only affects the hover background frame)
         dropdownElement.MouseEnter:Connect(function()
             TweenService:Create(dropdownElement, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundTransparency = 0}):Play()
         end)
@@ -1486,9 +1487,6 @@ function sectiontable:Dropdown(Info)
             containerHolder.ClipsDescendants = true
             
             UpdateVisuals()
-            
-            TweenService:Create(dropdownFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
-            TweenService:Create(dropdownUIStroke, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
         end)
 
         if DropdownOpened then
