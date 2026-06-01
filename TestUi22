@@ -1239,7 +1239,7 @@ function sectiontable:Dropdown(Info)
     dropdownFrame1.BorderSizePixel = 0
     dropdownFrame1.Position = UDim2.new(0, 2, 0, 2)
     dropdownFrame1.Size = UDim2.new(0, 171, 0, 24)
-    dropdownFrame1.Parent = dropdownFrame
+    dropdownFrame1.Parent = dropdown
 	
     local dropdownText = Instance.new("TextLabel")
     dropdownText.Name = "dropdownText"
