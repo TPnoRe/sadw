@@ -1341,8 +1341,8 @@ function sectiontable:Dropdown(Info)
     end
 
     -- Main Dropdown Button Hover (Only affects the button itself)
-    dropdownFrame.MouseEnter:Connect(function()
-        TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
+    dropdownFrame1.MouseEnter:Connect(function()
+        TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
     end)
 
     dropdownFrame.MouseLeave:Connect(function()
