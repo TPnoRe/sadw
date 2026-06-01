@@ -1252,6 +1252,7 @@ function sectiontable:Dropdown(Info)
     dropdownText.BackgroundTransparency = 1
     dropdownText.Position = UDim2.new(0, 8, 0, 0)
     dropdownText.Size = UDim2.new(0, 140, 0, 24)
+	dropdownText.ZIndex = 5
     dropdownText.Parent = dropdownFrame1
 
     local dropdownTextButton = Instance.new("TextButton")
@@ -1344,10 +1345,12 @@ function sectiontable:Dropdown(Info)
     -- Main Dropdown Button Hover (Only affects the button itself)
     dropdownFrame1.MouseEnter:Connect(function()
         TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
+		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 5}):Play()
     end)
 
     dropdownFrame1.MouseLeave:Connect(function()
         TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
+		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 1}):Play()
     end)
 
     dropdownTextButton.MouseButton1Down:Connect(function()
