@@ -1483,7 +1483,6 @@ function insidedropdown:Add(str)
 
     if DropdownOpened then
         ResizeDropdown(true, true)
-        task.wait(.1)
     else
         UpdateDropdownCanvas()
     end
@@ -1495,7 +1494,6 @@ function insidedropdown:Remove(opt)
             v:Destroy()
             if DropdownOpened then
                 ResizeDropdown(true, true)
-                task.wait(.1)
             else
                 UpdateDropdownCanvas()
             end
@@ -1514,6 +1512,13 @@ function insidedropdown:Clear()
         ResizeDropdown(true, true)
     else
         UpdateDropdownCanvas()
+    end
+end
+
+function insidedropdown:Refresh(newList)
+    insidedropdown:Clear()
+    for _,v in ipairs(newList) do
+        insidedropdown:Add(v)
     end
 end
 
