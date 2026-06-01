@@ -1304,6 +1304,7 @@ function sectiontable:Dropdown(Info)
     SearchBox.BackgroundColor3 = Theme.ItemFrame
     SearchBox.BorderSizePixel = 0
     SearchBox.Size = UDim2.new(0, 171, 0, 24)
+	SearchBox.Position = UDim2.new(0, 1, 0, 0)
     SearchBox.Visible = false
     SearchBox.Parent = dropdownContainer
 
