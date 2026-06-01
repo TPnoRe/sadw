@@ -1517,6 +1517,7 @@ end
 
 function insidedropdown:Refresh(newList)
     insidedropdown:Clear()
+    SearchBox.Text = ""
     for _,v in ipairs(newList) do
         insidedropdown:Add(v)
     end
