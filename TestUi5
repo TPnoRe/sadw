@@ -1205,353 +1205,410 @@ end)
 end
 
 function sectiontable:Dropdown(Info)
-Info.Text = Info.Text or "Dropdown"
-Info.Flag = Info.Flag or nil
-Info.Default = Info.Default or nil
-Info.List = Info.List or {}
-Info.Callback = Info.Callback or function() end
-Info.ChangeTextOnPick = Info.ChangeTextOnPick or false
-Info.MaxVisibleItems = Info.MaxVisibleItems or 7
+    Info.Text = Info.Text or "Dropdown"
+    Info.Flag = Info.Flag or nil
+    Info.Default = Info.Default or nil
+    Info.List = Info.List or {}
+    Info.Callback = Info.Callback or function() end
+    Info.ChangeTextOnPick = Info.ChangeTextOnPick or false
+    Info.MaxVisibleItems = Info.MaxVisibleItems or 7
+    Info.Multi = Info.Multi or false
 
-local insidedropdown = {}
+    local insidedropdown = {
+        Selected = {},
+        Elements = {}
+    }
 
-local dropdown = Instance.new("Frame")
-dropdown.Name = "Dropdown"
-dropdown.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dropdown.BackgroundTransparency = 1
-dropdown.Position = UDim2.new(0, 0, 3, 0)
-dropdown.Size = UDim2.new(0, 175, 0, 28)
-dropdown.Parent = itemContainer
+    local dropdown = Instance.new("Frame")
+    dropdown.Name = "Dropdown"
+    dropdown.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dropdown.BackgroundTransparency = 1
+    dropdown.Position = UDim2.new(0, 0, 3, 0)
+    dropdown.Size = UDim2.new(0, 175, 0, 28)
+    dropdown.Parent = itemContainer
 
-local dropdownFrame = Instance.new("Frame")
-dropdownFrame.Name = "dropdownFrame"
-dropdownFrame.BackgroundColor3 = Theme.ItemFrame
-dropdownFrame.BorderSizePixel = 0
-dropdownFrame.Position = UDim2.new(0, 2, 0, 2)
-dropdownFrame.Size = UDim2.new(0, 171, 0, 24)
-dropdownFrame.Parent = dropdown
+    local dropdownFrame = Instance.new("Frame")
+    dropdownFrame.Name = "dropdownFrame"
+    dropdownFrame.BackgroundColor3 = Theme.ItemFrame
+    dropdownFrame.BorderSizePixel = 0
+    dropdownFrame.Position = UDim2.new(0, 2, 0, 2)
+    dropdownFrame.Size = UDim2.new(0, 171, 0, 24)
+    dropdownFrame.Parent = dropdown
 
-local dropdownText = Instance.new("TextLabel")
-dropdownText.Name = "dropdownText"
-dropdownText.Font = Enum.Font.GothamBold
-dropdownText.Text = Info.Text
-dropdownText.TextColor3 = Theme.ItemText
-dropdownText.TextSize = 12
-dropdownText.TextXAlignment = Enum.TextXAlignment.Left
-dropdownText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dropdownText.BackgroundTransparency = 1
-dropdownText.Position = UDim2.new(0.0234, 0, 0, 0)
-dropdownText.Size = UDim2.new(0, 167, 0, 24)
-dropdownText.Parent = dropdownFrame
+    local dropdownText = Instance.new("TextLabel")
+    dropdownText.Name = "dropdownText"
+    dropdownText.Font = Enum.Font.GothamBold
+    dropdownText.Text = Info.Text
+    dropdownText.TextColor3 = Theme.ItemText
+    dropdownText.TextSize = 12
+    dropdownText.TextXAlignment = Enum.TextXAlignment.Left
+    dropdownText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownText.BackgroundTransparency = 1
+    dropdownText.Position = UDim2.new(0.0234, 0, 0, 0)
+    dropdownText.Size = UDim2.new(0, 167, 0, 24)
+    dropdownText.Parent = dropdownFrame
 
-local dropdownTextButton = Instance.new("TextButton")
-dropdownTextButton.Name = "dropdownTextButton"
-dropdownTextButton.Font = Enum.Font.SourceSans
-dropdownTextButton.Text = ""
-dropdownTextButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-dropdownTextButton.TextSize = 14
-dropdownTextButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dropdownTextButton.BackgroundTransparency = 1
-dropdownTextButton.Size = UDim2.new(0, 171, 0, 24)
-dropdownTextButton.Parent = dropdownFrame
+    local dropdownTextButton = Instance.new("TextButton")
+    dropdownTextButton.Name = "dropdownTextButton"
+    dropdownTextButton.Font = Enum.Font.SourceSans
+    dropdownTextButton.Text = ""
+    dropdownTextButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+    dropdownTextButton.TextSize = 14
+    dropdownTextButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownTextButton.BackgroundTransparency = 1
+    dropdownTextButton.Size = UDim2.new(0, 171, 0, 24)
+    dropdownTextButton.Parent = dropdownFrame
 
-local dropdownUIStroke = Instance.new("UIStroke")
-dropdownUIStroke.Name = "dropdownUIStroke"
-dropdownUIStroke.Color = Theme.ItemUIStroke
-dropdownUIStroke.Parent = dropdownFrame
+    local dropdownUIStroke = Instance.new("UIStroke")
+    dropdownUIStroke.Name = "dropdownUIStroke"
+    dropdownUIStroke.Color = Theme.ItemUIStroke
+    dropdownUIStroke.Parent = dropdownFrame
 
-local dropdownIcon = Instance.new("ImageLabel")
-dropdownIcon.Name = "dropdownIcon"
-dropdownIcon.Image = getcustomasset("Unnamed/Chevron.png")
-dropdownIcon.ImageColor3 = Theme.ItemText
-dropdownIcon.Active = true
-dropdownIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dropdownIcon.BackgroundTransparency = 1
-dropdownIcon.Position = UDim2.new(0, 155, 0, 5)
-dropdownIcon.Rotation = 90
-dropdownIcon.Size = UDim2.new(0, 17, 0, 17)
-dropdownIcon.ZIndex = 2
-dropdownIcon.Parent = dropdown
+    local dropdownIcon = Instance.new("ImageLabel")
+    dropdownIcon.Name = "dropdownIcon"
+    dropdownIcon.Image = getcustomasset("Unnamed/Chevron.png")
+    dropdownIcon.ImageColor3 = Theme.ItemText
+    dropdownIcon.Active = true
+    dropdownIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownIcon.BackgroundTransparency = 1
+    dropdownIcon.Position = UDim2.new(0, 155, 0, 5)
+    dropdownIcon.Rotation = 90
+    dropdownIcon.Size = UDim2.new(0, 17, 0, 17)
+    dropdownIcon.ZIndex = 2
+    dropdownIcon.Parent = dropdown
 
-local dropdownContainer = Instance.new("Frame")
-dropdownContainer.Name = "dropdownContainer"
-dropdownContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-dropdownContainer.BackgroundTransparency = 1
-dropdownContainer.BorderSizePixel = 0
-dropdownContainer.ClipsDescendants = true
-dropdownContainer.Position = UDim2.new(0, 2, 0, 24)
-dropdownContainer.Size = UDim2.new(0, 171, 0, 0)
-dropdownContainer.Parent = dropdown
+    local dropdownContainer = Instance.new("Frame")
+    dropdownContainer.Name = "dropdownContainer"
+    dropdownContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    dropdownContainer.BackgroundTransparency = 1
+    dropdownContainer.BorderSizePixel = 0
+    dropdownContainer.ClipsDescendants = true
+    dropdownContainer.Position = UDim2.new(0, 2, 0, 24)
+    dropdownContainer.Size = UDim2.new(0, 171, 0, 0)
+    dropdownContainer.Parent = dropdown
 
-local SearchBox = Instance.new("TextBox")
-SearchBox.Name = "SearchBox"
-SearchBox.PlaceholderText = "Search..."
-SearchBox.Text = ""
-SearchBox.Font = Enum.Font.GothamBold
-SearchBox.TextSize = 12
-SearchBox.TextColor3 = Theme.ItemText
-SearchBox.PlaceholderColor3 = Theme.InputPlaceHolder
-SearchBox.BackgroundColor3 = Theme.ItemFrame
-SearchBox.BorderSizePixel = 0
-SearchBox.Size = UDim2.new(1, 0, 0, 24)
-SearchBox.Visible = false
-SearchBox.Parent = dropdownContainer
+    local SearchBox = Instance.new("TextBox")
+    SearchBox.Name = "SearchBox"
+    SearchBox.PlaceholderText = "Search..."
+    SearchBox.Text = ""
+    SearchBox.Font = Enum.Font.GothamBold
+    SearchBox.TextSize = 12
+    SearchBox.TextColor3 = Theme.ItemText
+    SearchBox.PlaceholderColor3 = Theme.InputPlaceHolder
+    SearchBox.BackgroundColor3 = Theme.ItemFrame
+    SearchBox.BorderSizePixel = 0
+    SearchBox.Size = UDim2.new(1, 0, 0, 24)
+    SearchBox.Visible = false
+    SearchBox.Parent = dropdownContainer
 
-local dropdownScrollingFrame = Instance.new("ScrollingFrame")
-dropdownScrollingFrame.Name = "dropdownScrollingFrame"
-dropdownScrollingFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-dropdownScrollingFrame.BackgroundTransparency = 1
-dropdownScrollingFrame.BorderSizePixel = 0
-dropdownScrollingFrame.Position = UDim2.new(0, 0, 0, 24)
-dropdownScrollingFrame.Size = UDim2.new(1, 0, 1, -24)
-dropdownScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-dropdownScrollingFrame.ScrollBarThickness = 4
-dropdownScrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
-dropdownScrollingFrame.ScrollBarImageColor3 = Theme.DropdownIcon or Theme.ItemText
-dropdownScrollingFrame.Parent = dropdownContainer
+    local dropdownScrollingFrame = Instance.new("ScrollingFrame")
+    dropdownScrollingFrame.Name = "dropdownScrollingFrame"
+    dropdownScrollingFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dropdownScrollingFrame.BackgroundTransparency = 1
+    dropdownScrollingFrame.BorderSizePixel = 0
+    dropdownScrollingFrame.Position = UDim2.new(0, 0, 0, 24)
+    dropdownScrollingFrame.Size = UDim2.new(1, 0, 1, -24)
+    dropdownScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    dropdownScrollingFrame.ScrollBarThickness = 4
+    dropdownScrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+    dropdownScrollingFrame.ScrollBarImageColor3 = Theme.DropdownIcon or Theme.ItemText
+    dropdownScrollingFrame.Parent = dropdownContainer
 
-local dropdownUIListLayout = Instance.new("UIListLayout")
-dropdownUIListLayout.Name = "dropdownUIListLayout"
-dropdownUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-dropdownUIListLayout.Parent = dropdownScrollingFrame
+    local dropdownUIListLayout = Instance.new("UIListLayout")
+    dropdownUIListLayout.Name = "dropdownUIListLayout"
+    dropdownUIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    dropdownUIListLayout.Parent = dropdownScrollingFrame
 
-dropdownFrame.MouseEnter:Connect(function()
-    TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
-end)
+    local function UpdateVisuals()
+        local selectedCount = 0
+        for _ in pairs(insidedropdown.Selected) do selectedCount = selectedCount + 1 end
 
-dropdownFrame.MouseLeave:Connect(function()
-    TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
-    TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
-end)
-
-dropdownTextButton.MouseButton1Down:Connect(function()
-    TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStrokeSelected}):Play()
-end)
-
-dropdownTextButton.MouseButton1Up:Connect(function()
-    TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
-end)
-
-if Info.Default then
-    task.spawn(Info.Callback, Info.Default)
-    if Info.Flag then
-        library.Flags[Info.Flag] = Info.Default
-    end
-    if Info.ChangeTextOnPick then
-        dropdownText.Text = Info.Default
-    end
-end
-
-local DropdownOpened = false
-local CurrentDropdownHeight = 0
-local DropdownItemHeight = 24
-local DropdownMaxVisibleItems = tonumber(Info.MaxVisibleItems) or 7
-DropdownMaxVisibleItems = math.clamp(DropdownMaxVisibleItems, 1, 7)
-
-local function GetVisibleElementCount()
-    local count = 0
-    for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
-        if v.Name == "dropdownElement" and v.Visible then
-            count = count + 1
-        end
-    end
-    return count
-end
-
-local function GetOpenDropdownHeight()
-    local visibleItemsHeight = math.min(GetVisibleElementCount() * DropdownItemHeight, DropdownMaxVisibleItems * DropdownItemHeight)
-    return 24 + visibleItemsHeight
-end
-
-local function UpdateDropdownCanvas()
-    dropdownScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, GetVisibleElementCount() * DropdownItemHeight)
-end
-
-local function ResizeDropdown(open, tween)
-    local newHeight = open and GetOpenDropdownHeight() or 0
-    local delta = newHeight - CurrentDropdownHeight
-    CurrentDropdownHeight = newHeight
-    UpdateDropdownCanvas()
-
-    local tweenInfo = TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-    local targetSectionSize = UDim2.new(0, 175, 0, section.Size.Y.Offset + delta)
-    local targetSectionFrameSize = UDim2.new(0, 175, 0, sectionFrame.Size.Y.Offset + delta)
-    local targetItemContainerSize = UDim2.new(0, 175, 0, itemContainer.Size.Y.Offset + delta)
-    local targetDropdownSize = open and UDim2.new(0, 175, 0, newHeight + 28) or UDim2.new(0, 175, 0, 28)
-    local targetDropdownFrameSize = open and UDim2.new(0, 171, 0, newHeight + 24) or UDim2.new(0, 171, 0, 24)
-    local targetDropdownContainerSize = UDim2.new(0, 171, 0, newHeight)
-    local targetIconRotation = open and -90 or 90
-    local targetIconPosition = open and UDim2.new(0, 156, 0, 5) or UDim2.new(0, 155, 0, 5)
-
-    if tween then
-        TweenService:Create(section, tweenInfo, {Size = targetSectionSize}):Play()
-        TweenService:Create(sectionFrame, tweenInfo, {Size = targetSectionFrameSize}):Play()
-        TweenService:Create(itemContainer, tweenInfo, {Size = targetItemContainerSize}):Play()
-        TweenService:Create(dropdown, tweenInfo, {Size = targetDropdownSize}):Play()
-        TweenService:Create(dropdownFrame, tweenInfo, {Size = targetDropdownFrameSize}):Play()
-        TweenService:Create(dropdownContainer, tweenInfo, {Size = targetDropdownContainerSize}):Play()
-        TweenService:Create(dropdownIcon, tweenInfo, {Rotation = targetIconRotation}):Play()
-    else
-        section.Size = targetSectionSize
-        sectionFrame.Size = targetSectionFrameSize
-        itemContainer.Size = targetItemContainerSize
-        dropdown.Size = targetDropdownSize
-        dropdownFrame.Size = targetDropdownFrameSize
-        dropdownContainer.Size = targetDropdownContainerSize
-        dropdownIcon.Rotation = targetIconRotation
-    end
-
-    dropdownIcon.Position = targetIconPosition
-end
-
-SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    local Search = string.lower(SearchBox.Text)
-
-    for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
-        if v.Name == "dropdownElement" then
-            local Text = string.lower(v.dropdownElementText.Text)
-            v.Visible = string.find(Text, Search, 1, true) ~= nil
-        end
-    end
-
-    if DropdownOpened then
-        ResizeDropdown(true, true)
-    else
-        UpdateDropdownCanvas()
-    end
-end)
-
-function insidedropdown:Add(str)
-    local dropdownElement = Instance.new("Frame")
-    dropdownElement.Name = "dropdownElement"
-    dropdownElement.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    dropdownElement.BackgroundTransparency = 1
-    dropdownElement.Size = UDim2.new(1, -4, 0, DropdownItemHeight)
-    dropdownElement.ZIndex = 2
-    dropdownElement.Parent = dropdownScrollingFrame
-
-    local dropdownElementText = Instance.new("TextLabel")
-    dropdownElementText.Name = "dropdownElementText"
-    dropdownElementText.Font = Enum.Font.GothamBold
-    dropdownElementText.Text = str
-    dropdownElementText.TextColor3 = Theme.ItemText
-    dropdownElementText.TextSize = 12
-    dropdownElementText.TextXAlignment = Enum.TextXAlignment.Left
-    dropdownElementText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    dropdownElementText.BackgroundTransparency = 1
-    dropdownElementText.Position = UDim2.new(0.0234, 0, 0, 0)
-    dropdownElementText.Size = UDim2.new(1, -10, 0, DropdownItemHeight)
-    dropdownElementText.Parent = dropdownElement
-
-    local dropdownElementButton = Instance.new("TextButton")
-    dropdownElementButton.Name = "dropdownElementButton"
-    dropdownElementButton.Font = Enum.Font.SourceSans
-    dropdownElementButton.Text = ""
-    dropdownElementButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-    dropdownElementButton.TextSize = 14
-    dropdownElementButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    dropdownElementButton.BackgroundTransparency = 1
-    dropdownElementButton.Size = UDim2.new(1, 0, 0, DropdownItemHeight)
-    dropdownElementButton.Parent = dropdownElement
-
-    dropdownElement.MouseEnter:Connect(function()
-        TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.Highlight}):Play()
-    end)
-
-    dropdownElement.MouseLeave:Connect(function()
-        TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.ItemText}):Play()
-    end)
-
-    dropdownElementButton.MouseButton1Click:Connect(function()
-        task.spawn(Info.Callback, dropdownElementText.Text)
-        if Info.Flag then
-            library.Flags[Info.Flag] = dropdownElementText.Text
-        end
         if Info.ChangeTextOnPick then
-            dropdownText.Text = dropdownElementText.Text
+            if selectedCount == 0 then
+                dropdownText.Text = Info.Text
+            elseif selectedCount == 1 then
+                local val
+                for k in pairs(insidedropdown.Selected) do val = k break end
+                dropdownText.Text = Info.Text .. ": " .. tostring(val)
+            else
+                dropdownText.Text = Info.Text .. ": Mult"
+            end
         end
 
-        TweenService:Create(dropdownFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
-        TweenService:Create(dropdownUIStroke, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
+        for name, element in pairs(insidedropdown.Elements) do
+            local isSelected = insidedropdown.Selected[name] ~= nil
+            TweenService:Create(element.dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
+                TextColor3 = isSelected and Theme.Highlight or Theme.ItemText
+            }):Play()
+        end
+    end
 
-        DropdownOpened = false
-        SearchBox.Visible = false
-        ResizeDropdown(false, true)
-        task.wait(.1)
-        containerHolder.ClipsDescendants = true
+    dropdownFrame.MouseEnter:Connect(function()
+        TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
     end)
 
-    if DropdownOpened then
-        ResizeDropdown(true, true)
-    else
-        UpdateDropdownCanvas()
-    end
-end
+    dropdownFrame.MouseLeave:Connect(function()
+        TweenService:Create(dropdownFrame, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
+        TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
+    end)
 
-function insidedropdown:Remove(opt)
-    for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
-        if v.Name == "dropdownElement" and v.dropdownElementText.Text == opt then
-            v:Destroy()
+    dropdownTextButton.MouseButton1Down:Connect(function()
+        TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStrokeSelected}):Play()
+    end)
+
+    dropdownTextButton.MouseButton1Up:Connect(function()
+        TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
+    end)
+
+    local DropdownOpened = false
+    local CurrentDropdownHeight = 0
+    local DropdownItemHeight = 24
+    local DropdownMaxVisibleItems = tonumber(Info.MaxVisibleItems) or 7
+    DropdownMaxVisibleItems = math.clamp(DropdownMaxVisibleItems, 1, 7)
+
+    local function GetVisibleElementCount()
+        local count = 0
+        for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
+            if v.Name == "dropdownElement" and v.Visible then
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    local function GetOpenDropdownHeight()
+        local visibleItemsHeight = math.min(GetVisibleElementCount() * DropdownItemHeight, DropdownMaxVisibleItems * DropdownItemHeight)
+        return 24 + visibleItemsHeight
+    end
+
+    local function UpdateDropdownCanvas()
+        dropdownScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, GetVisibleElementCount() * DropdownItemHeight)
+    end
+
+    local function ResizeDropdown(open, tween)
+        local newHeight = open and GetOpenDropdownHeight() or 0
+        local delta = newHeight - CurrentDropdownHeight
+        CurrentDropdownHeight = newHeight
+        UpdateDropdownCanvas()
+
+        local tweenInfo = TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+        local targetSectionSize = UDim2.new(0, 175, 0, section.Size.Y.Offset + delta)
+        local targetSectionFrameSize = UDim2.new(0, 175, 0, sectionFrame.Size.Y.Offset + delta)
+        local targetItemContainerSize = UDim2.new(0, 175, 0, itemContainer.Size.Y.Offset + delta)
+        local targetDropdownSize = open and UDim2.new(0, 175, 0, newHeight + 28) or UDim2.new(0, 175, 0, 28)
+        local targetDropdownFrameSize = open and UDim2.new(0, 171, 0, newHeight + 24) or UDim2.new(0, 171, 0, 24)
+        local targetDropdownContainerSize = UDim2.new(0, 171, 0, newHeight)
+        local targetIconRotation = open and -90 or 90
+        local targetIconPosition = open and UDim2.new(0, 156, 0, 5) or UDim2.new(0, 155, 0, 5)
+
+        if tween then
+            TweenService:Create(section, tweenInfo, {Size = targetSectionSize}):Play()
+            TweenService:Create(sectionFrame, tweenInfo, {Size = targetSectionFrameSize}):Play()
+            TweenService:Create(itemContainer, tweenInfo, {Size = targetItemContainerSize}):Play()
+            TweenService:Create(dropdown, tweenInfo, {Size = targetDropdownSize}):Play()
+            TweenService:Create(dropdownFrame, tweenInfo, {Size = targetDropdownFrameSize}):Play()
+            TweenService:Create(dropdownContainer, tweenInfo, {Size = targetDropdownContainerSize}):Play()
+            TweenService:Create(dropdownIcon, tweenInfo, {Rotation = targetIconRotation}):Play()
+        else
+            section.Size = targetSectionSize
+            sectionFrame.Size = targetSectionFrameSize
+            itemContainer.Size = targetItemContainerSize
+            dropdown.Size = targetDropdownSize
+            dropdownFrame.Size = targetDropdownFrameSize
+            dropdownContainer.Size = targetDropdownContainerSize
+            dropdownIcon.Rotation = targetIconRotation
+        end
+
+        dropdownIcon.Position = targetIconPosition
+    end
+
+    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local Search = string.lower(SearchBox.Text)
+
+        for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
+            if v.Name == "dropdownElement" then
+                local Text = string.lower(v.dropdownElementText.Text)
+                v.Visible = string.find(Text, Search, 1, true) ~= nil
+            end
+        end
+
+        if DropdownOpened then
+            ResizeDropdown(true, true)
+        else
+            UpdateDropdownCanvas()
+        end
+    end)
+
+    function insidedropdown:Add(str)
+        local dropdownElement = Instance.new("Frame")
+        dropdownElement.Name = "dropdownElement"
+        dropdownElement.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        dropdownElement.BackgroundTransparency = 1
+        dropdownElement.Size = UDim2.new(1, -4, 0, DropdownItemHeight)
+        dropdownElement.ZIndex = 2
+        dropdownElement.Parent = dropdownScrollingFrame
+
+        local dropdownElementText = Instance.new("TextLabel")
+        dropdownElementText.Name = "dropdownElementText"
+        dropdownElementText.Font = Enum.Font.GothamBold
+        dropdownElementText.Text = str
+        dropdownElementText.TextColor3 = Theme.ItemText
+        dropdownElementText.TextSize = 12
+        dropdownElementText.TextXAlignment = Enum.TextXAlignment.Left
+        dropdownElementText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        dropdownElementText.BackgroundTransparency = 1
+        dropdownElementText.Position = UDim2.new(0.0234, 0, 0, 0)
+        dropdownElementText.Size = UDim2.new(1, -10, 0, DropdownItemHeight)
+        dropdownElementText.Parent = dropdownElement
+
+        local dropdownElementButton = Instance.new("TextButton")
+        dropdownElementButton.Name = "dropdownElementButton"
+        dropdownElementButton.Font = Enum.Font.SourceSans
+        dropdownElementButton.Text = ""
+        dropdownElementButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+        dropdownElementButton.TextSize = 14
+        dropdownElementButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        dropdownElementButton.BackgroundTransparency = 1
+        dropdownElementButton.Size = UDim2.new(1, 0, 0, DropdownItemHeight)
+        dropdownElementButton.Parent = dropdownElement
+
+        insidedropdown.Elements[str] = {
+            Frame = dropdownElement,
+            dropdownElementText = dropdownElementText
+        }
+
+        dropdownElement.MouseEnter:Connect(function()
+            if not insidedropdown.Selected[str] then
+                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.Highlight}):Play()
+            end
+        end)
+
+        dropdownElement.MouseLeave:Connect(function()
+            if not insidedropdown.Selected[str] then
+                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.ItemText}):Play()
+            end
+        end)
+
+        dropdownElementButton.MouseButton1Click:Connect(function()
+            if Info.Multi then
+                if insidedropdown.Selected[str] then
+                    insidedropdown.Selected[str] = nil
+                else
+                    insidedropdown.Selected[str] = true
+                end
+                
+                local selectedList = {}
+                for k in pairs(insidedropdown.Selected) do table.insert(selectedList, k) end
+                task.spawn(Info.Callback, selectedList)
+                if Info.Flag then library.Flags[Info.Flag] = selectedList end
+            else
+                insidedropdown.Selected = {[str] = true}
+                task.spawn(Info.Callback, str)
+                if Info.Flag then library.Flags[Info.Flag] = str end
+                
+                DropdownOpened = false
+                SearchBox.Visible = false
+                ResizeDropdown(false, true)
+                task.wait(.1)
+                containerHolder.ClipsDescendants = true
+            end
+            
+            UpdateVisuals()
+            
+            TweenService:Create(dropdownFrame, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
+            TweenService:Create(dropdownUIStroke, TweenInfo.new(.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStroke}):Play()
+        end)
+
+        if DropdownOpened then
+            ResizeDropdown(true, true)
+        else
+            UpdateDropdownCanvas()
+        end
+        
+        UpdateVisuals()
+    end
+
+    function insidedropdown:Remove(opt)
+        if insidedropdown.Elements[opt] then
+            insidedropdown.Elements[opt].Frame:Destroy()
+            insidedropdown.Elements[opt] = nil
+            insidedropdown.Selected[opt] = nil
+            
             if DropdownOpened then
                 ResizeDropdown(true, true)
             else
                 UpdateDropdownCanvas()
             end
-            break
+            UpdateVisuals()
         end
     end
-end
 
-function insidedropdown:Clear()
-    for _,v in pairs(dropdownScrollingFrame:GetChildren()) do
-        if v.Name == "dropdownElement" then
-            v:Destroy()
+    function insidedropdown:Clear()
+        for _,v in pairs(insidedropdown.Elements) do
+            v.Frame:Destroy()
+        end
+        insidedropdown.Elements = {}
+        insidedropdown.Selected = {}
+        
+        if DropdownOpened then
+            ResizeDropdown(true, true)
+        else
+            UpdateDropdownCanvas()
+        end
+        UpdateVisuals()
+    end
+
+    function insidedropdown:Refresh(newList)
+        insidedropdown:Clear()
+        SearchBox.Text = ""
+        for _,v in ipairs(newList) do
+            insidedropdown:Add(v)
         end
     end
-    if DropdownOpened then
-        ResizeDropdown(true, true)
-    else
-        UpdateDropdownCanvas()
-    end
-end
 
-function insidedropdown:Refresh(newList)
-    insidedropdown:Clear()
-    SearchBox.Text = ""
-    for _,v in ipairs(newList) do
+    function insidedropdown:Set(val)
+        if type(val) == "table" then
+            insidedropdown.Selected = {}
+            for _, v in ipairs(val) do insidedropdown.Selected[v] = true end
+        else
+            insidedropdown.Selected = {[val] = true}
+        end
+        UpdateVisuals()
+    end
+
+    for _,v in ipairs(Info.List) do
         insidedropdown:Add(v)
     end
-end
 
-for _,v in ipairs(Info.List) do
-    insidedropdown:Add(v)
-end
-
-SectionOpened:GetPropertyChangedSignal("Value"):Connect(function()
-    if DropdownOpened then
-        DropdownOpened = false
-        SearchBox.Visible = false
-        ResizeDropdown(false, false)
-        task.wait(.1)
-        containerHolder.ClipsDescendants = true
+    if Info.Default then
+        insidedropdown:Set(Info.Default)
     end
-end)
 
-dropdownTextButton.MouseButton1Click:Connect(function()
-    DropdownOpened = not DropdownOpened
-    SearchBox.Visible = DropdownOpened
+    SectionOpened:GetPropertyChangedSignal("Value"):Connect(function()
+        if DropdownOpened then
+            DropdownOpened = false
+            SearchBox.Visible = false
+            ResizeDropdown(false, false)
+            task.wait(.1)
+            containerHolder.ClipsDescendants = true
+        end
+    end)
 
-    if DropdownOpened then
-        containerHolder.ClipsDescendants = false
-        ResizeDropdown(true, true)
-    else
-        ResizeDropdown(false, true)
-        task.wait(.1)
-        containerHolder.ClipsDescendants = true
-    end
-end)
+    dropdownTextButton.MouseButton1Click:Connect(function()
+        DropdownOpened = not DropdownOpened
+        SearchBox.Visible = DropdownOpened
 
-return insidedropdown
+        if DropdownOpened then
+            containerHolder.ClipsDescendants = false
+            ResizeDropdown(true, true)
+        else
+            ResizeDropdown(false, true)
+            task.wait(.1)
+            containerHolder.ClipsDescendants = true
+        end
+    end)
+
+    return insidedropdown
 end
 function sectiontable:Toggle(Info)
 Info.Text = Info.Text or "Toggle"
