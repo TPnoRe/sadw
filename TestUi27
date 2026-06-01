@@ -1281,7 +1281,7 @@ function sectiontable:Dropdown(Info)
     dropdownIcon.Position = UDim2.new(1, -20, 0, 4)
     dropdownIcon.Rotation = 90
     dropdownIcon.Size = UDim2.new(0, 16, 0, 16)
-    dropdownIcon.ZIndex = 2
+    dropdownIcon.ZIndex = 5
     dropdownIcon.Parent = dropdownFrame1
 
     local dropdownContainer = Instance.new("Frame")
@@ -1354,14 +1354,8 @@ function sectiontable:Dropdown(Info)
 		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 1}):Play()
     end)
 	
-    dropdownIcon.MouseEnter:Connect(function()
-		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 5}):Play()
-		dropdownIcon.ZIndex = 2
-    end)
+		
 
-    dropdownIcon.MouseLeave:Connect(function()
-		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 2}):Play()
-    end)
 	
 	
     dropdownTextButton.MouseButton1Down:Connect(function()
