@@ -1210,7 +1210,6 @@ function sectiontable:Dropdown(Info)
     Info.Default = Info.Default or nil
     Info.List = Info.List or {}
     Info.Callback = Info.Callback or function() end
-    Info.ChangeTextOnPick = Info.ChangeTextOnPick or false
     Info.MaxVisibleItems = Info.MaxVisibleItems or 7
 
     local insidedropdown = {
@@ -1243,7 +1242,7 @@ function sectiontable:Dropdown(Info)
     dropdownText.TextXAlignment = Enum.TextXAlignment.Left
     dropdownText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownText.BackgroundTransparency = 1
-    dropdownText.Position = UDim2.new(0, 8, 0, 0) -- Adjusted for better look
+    dropdownText.Position = UDim2.new(0, 8, 0, 0)
     dropdownText.Size = UDim2.new(0, 140, 0, 24)
     dropdownText.Parent = dropdownFrame
 
@@ -1270,11 +1269,11 @@ function sectiontable:Dropdown(Info)
     dropdownIcon.Active = true
     dropdownIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownIcon.BackgroundTransparency = 1
-    dropdownIcon.Position = UDim2.new(1, -20, 0, 4) -- Positioned to the right
+    dropdownIcon.Position = UDim2.new(1, -20, 0, 4)
     dropdownIcon.Rotation = 90
     dropdownIcon.Size = UDim2.new(0, 16, 0, 16)
     dropdownIcon.ZIndex = 2
-    dropdownIcon.Parent = dropdownFrame -- Parented to frame for consistency
+    dropdownIcon.Parent = dropdownFrame
 
     local dropdownContainer = Instance.new("Frame")
     dropdownContainer.Name = "dropdownContainer"
@@ -1319,8 +1318,8 @@ function sectiontable:Dropdown(Info)
     dropdownUIListLayout.Parent = dropdownScrollingFrame
 
     local function UpdateVisuals()
-        if Info.ChangeTextOnPick and insidedropdown.Selected then
-            dropdownText.Text = Info.Text .. ": " .. tostring(insidedropdown.Selected)
+        if insidedropdown.Selected then
+            dropdownText.Text = tostring(insidedropdown.Selected)
         else
             dropdownText.Text = Info.Text
         end
@@ -1520,8 +1519,11 @@ function sectiontable:Dropdown(Info)
     end
 
     function insidedropdown:Clear()
-        for _,v in pairs(insidedropdown.Elements) do
-            v.Frame:Destroy()
+        -- Direct cleanup of the scrolling frame children
+        for _, v in pairs(dropdownScrollingFrame:GetChildren()) do
+            if v:IsA("Frame") and v.Name == "dropdownElement" then
+                v:Destroy()
+            end
         end
         insidedropdown.Elements = {}
         insidedropdown.Selected = nil
@@ -1540,6 +1542,7 @@ function sectiontable:Dropdown(Info)
         for _,v in ipairs(newList) do
             insidedropdown:Add(v)
         end
+        UpdateVisuals()
     end
 
     function insidedropdown:Set(val)
