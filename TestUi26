@@ -1346,13 +1346,24 @@ function sectiontable:Dropdown(Info)
     dropdownFrame1.MouseEnter:Connect(function()
         TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
 		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 5}):Play()
-    end)
 
+    end)
+	
     dropdownFrame1.MouseLeave:Connect(function()
         TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.ItemFrame}):Play()
 		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 1}):Play()
     end)
+	
+    dropdownIcon.MouseEnter:Connect(function()
+		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 5}):Play()
+		dropdownIcon.ZIndex = 2
+    end)
 
+    dropdownIcon.MouseLeave:Connect(function()
+		TweenService:Create(dropdownFrame1, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {ZIndex = 2}):Play()
+    end)
+	
+	
     dropdownTextButton.MouseButton1Down:Connect(function()
         TweenService:Create(dropdownUIStroke, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Color = Theme.ItemUIStrokeSelected}):Play()
     end)
