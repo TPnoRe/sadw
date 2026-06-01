@@ -1465,12 +1465,14 @@ function sectiontable:Dropdown(Info)
 
         dropdownElement.MouseEnter:Connect(function()
             if insidedropdown.Selected ~= str then
-                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.Highlight}):Play()
+                -- Hover color (Bright white)
+                TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
             end
         end)
 
         dropdownElement.MouseLeave:Connect(function()
             if insidedropdown.Selected ~= str then
+                -- Return to normal text color
                 TweenService:Create(dropdownElementText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {TextColor3 = Theme.ItemText}):Play()
             end
         end)
@@ -1519,7 +1521,6 @@ function sectiontable:Dropdown(Info)
     end
 
     function insidedropdown:Clear()
-        -- Direct cleanup of the scrolling frame children
         for _, v in pairs(dropdownScrollingFrame:GetChildren()) do
             if v:IsA("Frame") and v.Name == "dropdownElement" then
                 v:Destroy()
