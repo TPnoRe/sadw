@@ -1289,8 +1289,8 @@ function sectiontable:Dropdown(Info)
     dropdownContainer.BackgroundTransparency = 1
     dropdownContainer.BorderSizePixel = 0
     dropdownContainer.ClipsDescendants = true
-    dropdownContainer.Position = UDim2.new(0, 2, 0, 24)
-    dropdownContainer.Size = UDim2.new(0, 171, 0, 0)
+    dropdownContainer.Position = UDim2.new(0, 1, 0, 24)
+    dropdownContainer.Size = UDim2.new(0, 173, 0, 0)
     dropdownContainer.Parent = dropdown
 
     local SearchBox = Instance.new("TextBox")
@@ -1303,7 +1303,7 @@ function sectiontable:Dropdown(Info)
     SearchBox.PlaceholderColor3 = Theme.InputPlaceHolder
     SearchBox.BackgroundColor3 = Theme.ItemFrame
     SearchBox.BorderSizePixel = 0
-    SearchBox.Size = UDim2.new(1, 0, 0, 24)
+    SearchBox.Size = UDim2.new(0, 171, 0, 24)
     SearchBox.Visible = false
     SearchBox.Parent = dropdownContainer
 
