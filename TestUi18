@@ -1232,7 +1232,15 @@ function sectiontable:Dropdown(Info)
     dropdownFrame.Position = UDim2.new(0, 2, 0, 2)
     dropdownFrame.Size = UDim2.new(0, 171, 0, 24)
     dropdownFrame.Parent = dropdown
-
+	
+    local dropdownFrame1 = Instance.new("Frame")
+    dropdownFrame1.Name = "dropdownFrame1"
+    dropdownFrame1.BackgroundColor3 = Theme.ItemFrame
+    dropdownFrame1.BorderSizePixel = 0
+    dropdownFrame1.Position = UDim2.new(0, 2, 0, 2)
+    dropdownFrame1.Size = UDim2.new(0, 171, 0, 24)
+    dropdownFrame1.Parent = dropdown
+	
     local dropdownText = Instance.new("TextLabel")
     dropdownText.Name = "dropdownText"
     dropdownText.Font = Enum.Font.GothamBold
@@ -1244,7 +1252,7 @@ function sectiontable:Dropdown(Info)
     dropdownText.BackgroundTransparency = 1
     dropdownText.Position = UDim2.new(0, 8, 0, 0)
     dropdownText.Size = UDim2.new(0, 140, 0, 24)
-    dropdownText.Parent = dropdownFrame
+    dropdownText.Parent = dropdownFrame1
 
     local dropdownTextButton = Instance.new("TextButton")
     dropdownTextButton.Name = "dropdownTextButton"
@@ -1255,12 +1263,12 @@ function sectiontable:Dropdown(Info)
     dropdownTextButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     dropdownTextButton.BackgroundTransparency = 1
     dropdownTextButton.Size = UDim2.new(1, 0, 1, 0)
-    dropdownTextButton.Parent = dropdownFrame
+    dropdownTextButton.Parent = dropdownFrame1
 
     local dropdownUIStroke = Instance.new("UIStroke")
     dropdownUIStroke.Name = "dropdownUIStroke"
     dropdownUIStroke.Color = Theme.ItemUIStroke
-    dropdownUIStroke.Parent = dropdownFrame
+    dropdownUIStroke.Parent = dropdownFrame1
 
     local dropdownIcon = Instance.new("ImageLabel")
     dropdownIcon.Name = "dropdownIcon"
@@ -1273,7 +1281,7 @@ function sectiontable:Dropdown(Info)
     dropdownIcon.Rotation = 90
     dropdownIcon.Size = UDim2.new(0, 16, 0, 16)
     dropdownIcon.ZIndex = 2
-    dropdownIcon.Parent = dropdownFrame
+    dropdownIcon.Parent = dropdownFrame1
 
     local dropdownContainer = Instance.new("Frame")
     dropdownContainer.Name = "dropdownContainer"
