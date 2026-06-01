@@ -1332,8 +1332,8 @@ function sectiontable:Dropdown(Info)
         end
     end
 
-    dropdown.MouseEnter:Connect(function()
-        TweenService:Create(dropdown, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
+    dropdownText.MouseEnter:Connect(function()
+        TweenService:Create(dropdownText, TweenInfo.new(.125, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {BackgroundColor3 = Theme.HoverItemFrame}):Play()
     end)
 
     dropdownFrame.MouseLeave:Connect(function()
