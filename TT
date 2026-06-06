@@ -18,7 +18,7 @@ local function loadSettings()
         VegitoEnabled = false,
         AutoCreateEnabled = false,
         Level = 1,
-        PortalName = "GokuBlackKey"
+        PortalName = "GokuBlack"
     }
     
     if isfile and isfile(fileName) then
@@ -95,8 +95,6 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
         return
     end
 
-    
-    wait(0.5)
     -- เริ่มการทำงาน
     hrp.CFrame = promptPart.CFrame + WARP_OFFSET
     task.wait(PROMPT_DELAY)
@@ -107,10 +105,6 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
 
     task.wait(PROMPT_DELAY)
     hrp.CFrame = originalCFrame
-    wait(0.5)
-    hrp.CFrame = CFrame.new(218, 6, -6813)
-    wait(0.5)
-    hrp.CFrame = CFrame.new(218, 6, -6813)
 end
 
 -- งานย่อย 1: Zeno & Time Machine (ทำงานได้ทุกที่)
