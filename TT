@@ -105,6 +105,10 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
 
     task.wait(PROMPT_DELAY)
     hrp.CFrame = originalCFrame
+    wait(0.5)
+    hrp.CFrame = CFrame.new(218, 6, -6813)
+    wait(0.5)
+    hrp.CFrame = CFrame.new(218, 6, -6813)
 end
 
 -- งานย่อย 1: Zeno & Time Machine (ทำงานได้ทุกที่)
