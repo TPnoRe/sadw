@@ -1,0 +1,314 @@
+-- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่นแก้ไข Error สมบูรณ์แบบ
+-- ปรับปรุง: แก้ไขการส่งพารามิเตอร์ให้ครบถ้วนในทุกฟังก์ชัน เพื่อป้องกัน Argument missing error
+
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local LOBBY_PLACE_ID = 133410800847665
+local fileName = "AutoPromptSettings_FinalFix.json"
+
+-- --- ส่วนที่ 1: การจัดการข้อมูลและการตั้งค่า --- --
+
+local function loadSettings()
+    local defaultSettings = {
+        ZenoEnabled = false,
+        VegitoEnabled = false,
+        AutoCreateEnabled = false,
+        Level = 1,
+        PortalName = "GokuBlackKey"
+    }
+    
+    if isfile and isfile(fileName) then
+        local success, content = pcall(readfile, fileName)
+        if success then
+            local success2, data = pcall(function() return HttpService:JSONDecode(content) end)
+            if success2 then
+                for k, v in pairs(defaultSettings) do
+                    if data[k] == nil then data[k] = v end
+                end
+                return data
+            end
+        end
+    end
+    return defaultSettings
+end
+
+local function saveSettings(data)
+    if writefile then
+        pcall(writefile, fileName, HttpService:JSONEncode(data))
+    end
+end
+
+local settings = loadSettings()
+
+-- --- ส่วนที่ 2: ฟังก์ชันช่วยและ Automation Logic --- --
+
+local LOOP_DELAY = 1
+local PROMPT_DELAY = 0.2
+local ACTION_DELAY = 0.5
+local WARP_OFFSET = Vector3.new(0, 0, 2)
+
+-- ฟังก์ชัน safeRun แบบปรับปรุง (แสดงหมายเลขบรรทัดที่ Error)
+local function safeRun(taskName, taskFunction, ...)
+    local success, err = xpcall(taskFunction, function(message)
+        return debug.traceback(message)
+    end, ...)
+    
+    if not success then
+        warn("❌ [" .. taskName .. " CRITICAL ERROR]:\n" .. tostring(err))
+    end
+end
+
+local function findProximityPrompt(name)
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+        if descendant:IsA("ProximityPrompt") and descendant.Name == name then
+            return descendant
+        end
+    end
+    return nil
+end
+
+local function isPromptReady(promptInstance, requireEnabled)
+    if not promptInstance or not promptInstance:IsA("ProximityPrompt") then return false end
+    if requireEnabled and not promptInstance.Enabled then return false end
+    return true
+end
+
+-- ฟังก์ชันหลักสำหรับการกด Prompt (แก้ไข: เพิ่มการตรวจสอบ Parameter)
+local function performPromptAutomation(player, promptInstance, originalCFrame, ancestorClassName)
+    -- ตรวจสอบความครบถ้วนของ Parameter เพื่อป้องกัน Error
+    if not player or not promptInstance or not originalCFrame or not ancestorClassName then
+        warn("⚠️ performPromptAutomation: Missing arguments!")
+        return
+    end
+
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local promptPart = promptInstance:FindFirstAncestorWhichIsA(ancestorClassName)
+    if not promptPart then
+        warn("⚠️ Could not find ancestor of class: " .. tostring(ancestorClassName))
+        return
+    end
+
+    -- เริ่มการทำงาน
+    hrp.CFrame = promptPart.CFrame + WARP_OFFSET
+    task.wait(PROMPT_DELAY)
+
+    if typeof(fireproximityprompt) == "function" then
+        fireproximityprompt(promptInstance)
+    end
+
+    task.wait(PROMPT_DELAY)
+    hrp.CFrame = originalCFrame
+end
+
+-- งานย่อย 1: Zeno & Time Machine (ทำงานได้ทุกที่)
+local function runZenoAndTimeMachine(player, originalCFrame)
+    if not settings.ZenoEnabled then return end
+    
+    -- 1. กด Zeno
+    local zenoPrompt = findProximityPrompt("ZenoButtonPrompt")
+    if isPromptReady(zenoPrompt, true) then
+        performPromptAutomation(player, zenoPrompt, originalCFrame, "MeshPart")
+        task.wait(ACTION_DELAY)
+    end
+    
+    if not settings.ZenoEnabled then return end
+    
+    -- 2. กด Time Machine
+    local timeMachinePrompt = findProximityPrompt("TimeMachinePrompt")
+    if isPromptReady(timeMachinePrompt, false) then
+        local originalEnabled = timeMachinePrompt.Enabled
+        timeMachinePrompt.Enabled = true
+        performPromptAutomation(player, timeMachinePrompt, originalCFrame, "Part")
+        timeMachinePrompt.Enabled = originalEnabled
+    end
+end
+
+-- งานย่อย 2: Vegito Defense (ทำงานได้ทุกที่)
+local function runVegitoDefense(player, originalCFrame)
+    if not settings.VegitoEnabled then return end
+    local vegitoPrompt = findProximityPrompt("VegitoDefensePrompt")
+    if isPromptReady(vegitoPrompt, true) then
+        -- แก้ไข: ส่งค่าให้ครบถ้วน
+        performPromptAutomation(player, vegitoPrompt, originalCFrame, "BasePart")
+    end
+end
+
+-- งานย่อย 3: Auto Create Portal (เฉพาะใน Lobby)
+local function runAutoCreateAndStartPortal()
+    if not settings.AutoCreateEnabled then return end
+    if game.PlaceId ~= LOBBY_PLACE_ID then return end
+
+    local lobbyUi = player.PlayerGui:FindFirstChild("LobbyUi")
+    local knitService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
+    
+    local function getPortalParty()
+        return lobbyUi and lobbyUi:FindFirstChild("PortalParty")
+    end
+
+    local portalParty = getPortalParty()
+    local isPortalReady = portalParty and portalParty.Enabled == true
+
+    if not isPortalReady then
+        while settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID do
+            local itemName = settings.PortalName .. "Key" .. settings.Level
+            pcall(function()
+                knitService:WaitForChild("ItemService"):WaitForChild("RF"):WaitForChild("UseItem"):InvokeServer(itemName)
+            end)
+            
+            local checkElapsed = 0
+            while checkElapsed < 2 and settings.AutoCreateEnabled do
+                portalParty = getPortalParty()
+                if portalParty and portalParty.Enabled == true then
+                    isPortalReady = true
+                    break
+                end
+                task.wait(0.5)
+                checkElapsed = checkElapsed + 0.5
+            end
+            if isPortalReady then break end
+        end
+    end
+end
+
+-- ลูปสำหรับกด Start Portal
+task.spawn(function()
+    while true do
+        if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
+            local lobbyUi = player.PlayerGui:FindFirstChild("LobbyUi")
+            if lobbyUi then
+                local portalParty = lobbyUi:FindFirstChild("PortalParty")
+                if portalParty and portalParty.Enabled == true then
+                    task.wait(0.5)
+                    if settings.AutoCreateEnabled and portalParty and portalParty.Enabled == true then
+                        local knitService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
+                        pcall(function()
+                            knitService:WaitForChild("PortalService"):WaitForChild("RF"):WaitForChild("StartPortal"):InvokeServer()
+                        end)
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+-- ฟังก์ชันสำหรับ Leave Portal
+local function leavePortal()
+    pcall(function()
+        if game.PlaceId ~= LOBBY_PLACE_ID then return end
+        local knitService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
+        knitService:WaitForChild("PortalService"):WaitForChild("RF"):WaitForChild("LeavePortal"):InvokeServer()
+    end)
+end
+
+-- --- ส่วนที่ 3: GUI Construction --- --
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoPromptGui_FinalFix"
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 220, 0, 320)
+MainFrame.Position = UDim2.new(0, 20, 0, 20)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 2
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "Fixed Automation"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+Title.TextScaled = true
+Title.Font = Enum.Font.SourceSansBold
+
+local function createToggleButton(name, yPos, text, settingKey)
+    local btn = Instance.new("TextButton", MainFrame)
+    btn.Name = name
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextColor3 = Color3.new(1,1,1)
+    
+    local function updateBtn()
+        local enabled = settings[settingKey]
+        btn.Text = text .. " : " .. (enabled and "ON" or "OFF")
+        btn.BackgroundColor3 = enabled and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(180, 0, 0)
+    end
+    
+    btn.MouseButton1Click:Connect(function()
+        settings[settingKey] = not settings[settingKey]
+        if settingKey == "AutoCreateEnabled" and settings[settingKey] == false then
+            leavePortal()
+        end
+        updateBtn()
+        saveSettings(settings)
+    end)
+    
+    updateBtn()
+    return btn
+end
+
+createToggleButton("ZenoToggle", 50, "Zeno / TM", "ZenoEnabled")
+createToggleButton("VegitoToggle", 100, "Vegito Defense", "VegitoEnabled")
+createToggleButton("AutoCreateToggle", 150, "Auto Create & Start", "AutoCreateEnabled")
+
+local LevelDisplay = Instance.new("TextLabel", MainFrame)
+LevelDisplay.Size = UDim2.new(0.4, 0, 0, 30); LevelDisplay.Position = UDim2.new(0.3, 0, 0, 200)
+LevelDisplay.Text = "Level "..tostring(settings.Level); LevelDisplay.TextColor3 = Color3.new(1,1,1); LevelDisplay.BackgroundTransparency = 1; LevelDisplay.TextScaled = true
+
+local function updateLevel(delta)
+    settings.Level = math.clamp(settings.Level + delta, 1, 4)
+    LevelDisplay.Text = "Level "..tostring(settings.Level); saveSettings(settings)
+end
+
+local PrevLvl = Instance.new("TextButton", MainFrame)
+PrevLvl.Size = UDim2.new(0.1, 0, 0, 30); PrevLvl.Position = UDim2.new(0.15, 0, 0, 200); PrevLvl.Text = "<"
+PrevLvl.MouseButton1Click:Connect(function() updateLevel(-1) end)
+
+local NextLvl = Instance.new("TextButton", MainFrame)
+NextLvl.Size = UDim2.new(0.1, 0, 0, 30); NextLvl.Position = UDim2.new(0.75, 0, 0, 200); NextLvl.Text = ">"
+NextLvl.MouseButton1Click:Connect(function() updateLevel(1) end)
+
+local PortalInput = Instance.new("TextBox", MainFrame)
+PortalInput.Size = UDim2.new(0.9, 0, 0, 40); PortalInput.Position = UDim2.new(0.05, 0, 0, 240)
+PortalInput.Text = settings.PortalName; PortalInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60); PortalInput.TextColor3 = Color3.new(1,1,1); PortalInput.TextScaled = true
+PortalInput.FocusLost:Connect(function() settings.PortalName = PortalInput.Text; saveSettings(settings) end)
+
+local CloseBtn = Instance.new("TextButton", MainFrame)
+CloseBtn.Size = UDim2.new(0.9, 0, 0, 30); CloseBtn.Position = UDim2.new(0.05, 0, 0, 285); CloseBtn.Text = "Close Menu"
+CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+-- --- ส่วนที่ 4: ลูปหลักของ Automation --- --
+
+task.spawn(function()
+    print("🚀 ระบบ Automation แก้ไขสมบูรณ์ พร้อมทำงาน")
+    while true do
+        task.wait(LOOP_DELAY)
+        
+        local character = player.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if hrp then
+            local originalCFrame = hrp.CFrame
+            
+            if settings.ZenoEnabled then
+                safeRun("Zeno/TimeMachine", runZenoAndTimeMachine, player, originalCFrame)
+            end
+            if settings.VegitoEnabled then
+                safeRun("VegitoDefense", runVegitoDefense, player, originalCFrame)
+            end
+            if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
+                safeRun("AutoCreateAndStartPortal", runAutoCreateAndStartPortal)
+            end
+        end
+    end
+end)
