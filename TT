@@ -302,10 +302,16 @@ task.spawn(function()
         
         local character = player.Character
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
-        
+        local targetPos = Vector3.new(218, 6, -6813)
+        local teleported = false
+
         if hrp then
 
-            hrp.CFrame = CFrame.new(218, 6, -6813)
+            if not teleported and (hrp.Position - targetPos).Magnitude > 10 then
+                hrp.CFrame = CFrame.new(targetPos)
+                teleported = true
+                print("วาปครั้งเดียวเรียบร้อย")
+            end
 
             local originalCFrame = hrp.CFrame
             
