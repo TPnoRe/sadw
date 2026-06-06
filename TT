@@ -95,6 +95,8 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
         return
     end
 
+    hrp.CFrame = CFrame.new(218, 6, -6813)
+    wait(0.5)
     -- เริ่มการทำงาน
     hrp.CFrame = promptPart.CFrame + WARP_OFFSET
     task.wait(PROMPT_DELAY)
