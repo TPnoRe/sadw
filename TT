@@ -1,4 +1,4 @@
--- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + Ultra Robust Auto Portal
+-- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + On-Screen Logs
 
 local SCRIPT_NAME = "AutoPromptGui_FinalFix"
 local Players = game:GetService("Players")
@@ -63,20 +63,33 @@ local ACTION_DELAY = 0.5
 local WARP_OFFSET = Vector3.new(0, 0, 2)
 local LOBBY_PLACE_ID = 133410800847665
 
--- ระบบค้นหา Knit Service แบบยืดหยุ่น
+-- ระบบ Log บนหน้าจอ
+local logEntries = {}
+local MAX_LOGS = 5
+local logContainer
+
+local function addLog(text, color)
+    if not logContainer then return end
+    color = color or Color3.new(1,1,1)
+    table.insert(logEntries, {text = text, color = color})
+    if #logEntries > MAX_LOGS then table.remove(logEntries, 1) end
+    
+    local fullText = ""
+    for i, entry in ipairs(logEntries) do
+        fullText = fullText .. entry.text .. "\n"
+    end
+    logContainer.Text = fullText
+    print("[LOG]: " .. text) -- ยังคงพิมพ์ใน F9 ด้วย
+end
+
+-- ระบบค้นหา Knit Service
 local function getKnitService(serviceName)
     local success, result = pcall(function()
-        -- ลองหาจาก Path มาตรฐานก่อน
         local services = ReplicatedStorage:FindFirstChild("Services", true) or 
                          ReplicatedStorage:FindFirstChild("knit", true):FindFirstChild("Services", true)
-        
-        if services then
-            return services:FindFirstChild(serviceName)
-        end
-        
-        -- ถ้าหาไม่เจอ ให้สแกนหาทั้ง ReplicatedStorage
+        if services then return services:FindFirstChild(serviceName) end
         for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
-            if v.Name == serviceName and v:IsA("ModuleScript") or v:IsA("Folder") then
+            if (v.Name == serviceName) and (v:IsA("ModuleScript") or v:IsA("RemoteFunction") or v:IsA("Folder")) then
                 return v
             end
         end
@@ -115,7 +128,7 @@ end
 
 local function safeRun(taskName, taskFunction, ...)
     local success, err = xpcall(taskFunction, function(message) return debug.traceback(message) end, ...)
-    if not success then warn("❌ [" .. taskName .. " ERROR]: " .. tostring(err)) end
+    if not success then addLog("❌ " .. taskName .. " Error", Color3.new(1,0,0)) end
 end
 
 local function performPromptAutomation(promptInstance, originalCFrame, ancestorClassName)
@@ -135,12 +148,14 @@ local function runZeno(originalCFrame)
     if not settings.ZenoEnabled then return end
     local zenoPrompt = findProximityPrompt("ZenoButtonPrompt")
     if isPromptReady(zenoPrompt, true) then
+        addLog("🌀 กดปุ่ม Zeno...", Color3.new(0.3, 0.8, 1))
         performPromptAutomation(zenoPrompt, originalCFrame, "MeshPart")
         task.wait(ACTION_DELAY)
     end
     if shouldStop() or not settings.ZenoEnabled then return end
     local timeMachinePrompt = findProximityPrompt("TimeMachinePrompt")
     if isPromptReady(timeMachinePrompt, false) then
+        addLog("⏳ กดปุ่ม Time Machine...", Color3.new(1, 0.8, 0.3))
         local old = timeMachinePrompt.Enabled
         timeMachinePrompt.Enabled = true
         performPromptAutomation(timeMachinePrompt, originalCFrame, "Part")
@@ -151,7 +166,10 @@ end
 local function runVegito(originalCFrame)
     if not settings.VegitoEnabled then return end
     local vegitoPrompt = findProximityPrompt("VegitoDefensePrompt")
-    if isPromptReady(vegitoPrompt, true) then performPromptAutomation(vegitoPrompt, originalCFrame, "BasePart") end
+    if isPromptReady(vegitoPrompt, true) then 
+        addLog("⚔️ กดปุ่ม Vegito...", Color3.new(0.3, 1, 0.3))
+        performPromptAutomation(vegitoPrompt, originalCFrame, "BasePart") 
+    end
 end
 
 -- --- ส่วนที่ 3: GUI Construction --- --
@@ -166,7 +184,7 @@ ScreenGui.Destroying:Connect(function()
 end)
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-local finalSize = UDim2.new(0, 180, 0, 260)
+local finalSize = UDim2.new(0, 180, 0, 340) -- เพิ่มความสูงเพื่อรองรับ Log
 local minSize = UDim2.new(0, 180, 0, 35)
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
 local p = settings.GuiPos
@@ -198,9 +216,7 @@ local MinBtn = Instance.new("TextButton", MainFrame)
 MinBtn.Size = UDim2.new(0, 30, 0, 30)
 MinBtn.Position = UDim2.new(1, -35, 0, 2.5)
 MinBtn.Text = settings.IsMinimized and "+" or "-"
-MinBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-MinBtn.TextColor3 = Color3.new(1,1,1)
-MinBtn.TextScaled = true
+MinBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60); MinBtn.TextColor3 = Color3.new(1,1,1); MinBtn.TextScaled = true
 Instance.new("UICorner", MinBtn)
 
 local isTweening = false
@@ -272,9 +288,19 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 Instance.new("UICorner", CloseBtn)
 
--- --- ส่วนที่ 4: Main Loop (Ultra Robust Auto Portal) --- --
+-- หน้าต่าง Log
+logContainer = Instance.new("TextLabel", MainFrame)
+logContainer.Size = UDim2.new(0.9, 0, 0, 70)
+logContainer.Position = UDim2.new(0.05, 0, 0, 265)
+logContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+logContainer.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+logContainer.TextSize = 10; logContainer.Font = Enum.Font.Code
+logContainer.Text = "Logs will appear here..."; logContainer.TextYAlignment = Enum.TextYAlignment.Top; logContainer.TextXAlignment = Enum.TextXAlignment.Left
+Instance.new("UICorner", logContainer)
+
+-- --- ส่วนที่ 4: Main Loop --- --
 task.spawn(function()
-    print("🚀 สคริปต์เริ่มทำงาน (Ultra Robust Auto Portal)")
+    addLog("🚀 Script Started!", Color3.new(1, 1, 0))
     while not shouldStop() do
         task.wait(LOOP_DELAY)
         local character = player.Character
@@ -296,46 +322,38 @@ task.spawn(function()
         if shouldStop() then break end
 
         if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
-            -- ค้นหา PortalParty แบบสแกนทั่ว PlayerGui
             local portalParty = player.PlayerGui:FindFirstChild("PortalParty", true)
             local isPortalActive = portalParty and (portalParty.Enabled or (portalParty:IsA("Frame") and portalParty.Visible))
             
             if not isPortalActive then
                 local itemName = settings.PortalName .. "Key" .. settings.Level
-                print("🛠️ กำลังหา Service เพื่อใช้ไอเทม: " .. itemName)
-                
                 local itemService = getKnitService("ItemService")
                 if itemService then
                     local rf = itemService:FindFirstChild("UseItem", true)
-                    if rf and rf:IsA("RemoteFunction") then
-                        print("📡 ส่งคำสั่ง UseItem...")
-                        local success, err = pcall(function() rf:InvokeServer(itemName) end)
-                        if not success then warn("❌ UseItem Error: " .. tostring(err)) end
+                    if rf then
+                        addLog("🛠️ Using Item: " .. itemName)
+                        pcall(function() rf:InvokeServer(itemName) end)
                     else
-                        warn("❌ ไม่พบ RemoteFunction: UseItem")
+                        addLog("❌ RF UseItem not found", Color3.new(1, 0, 0))
                     end
                 else
-                    warn("❌ ไม่พบ ItemService")
+                    addLog("❌ ItemService not found", Color3.new(1, 0, 0))
                 end
                 task.wait(1.5)
             else
-                print("✅ พบพอร์ทัลแล้ว กำลังสั่งเริ่ม (StartPortal)...")
                 local portalService = getKnitService("PortalService")
                 if portalService then
                     local rf = portalService:FindFirstChild("StartPortal", true)
-                    if rf and rf:IsA("RemoteFunction") then
-                        print("🚀 ส่งคำสั่ง StartPortal...")
+                    if rf then
+                        addLog("🚀 Starting Portal...", Color3.new(0, 1, 0))
                         local success, err = pcall(function() rf:InvokeServer() end)
-                        if success then
-                            print("✨ StartPortal สำเร็จ!")
-                        else
-                            warn("❌ StartPortal Error: " .. tostring(err))
-                        end
+                        if success then addLog("✨ Started Successfully!", Color3.new(0, 1, 1))
+                        else addLog("❌ Start Error", Color3.new(1, 0, 0)) end
                     else
-                        warn("❌ ไม่พบ RemoteFunction: StartPortal")
+                        addLog("❌ RF StartPortal not found", Color3.new(1, 0, 0))
                     end
                 else
-                    warn("❌ ไม่พบ PortalService")
+                    addLog("❌ PortalService not found", Color3.new(1, 0, 0))
                 end
                 task.wait(2.5)
             end
