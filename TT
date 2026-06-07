@@ -1,4 +1,4 @@
--- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + Fixed Auto Portal
+-- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + Ultra Robust Auto Portal
 
 local SCRIPT_NAME = "AutoPromptGui_FinalFix"
 local Players = game:GetService("Players")
@@ -62,6 +62,27 @@ local PROMPT_DELAY = 0.2
 local ACTION_DELAY = 0.5
 local WARP_OFFSET = Vector3.new(0, 0, 2)
 local LOBBY_PLACE_ID = 133410800847665
+
+-- ระบบค้นหา Knit Service แบบยืดหยุ่น
+local function getKnitService(serviceName)
+    local success, result = pcall(function()
+        -- ลองหาจาก Path มาตรฐานก่อน
+        local services = ReplicatedStorage:FindFirstChild("Services", true) or 
+                         ReplicatedStorage:FindFirstChild("knit", true):FindFirstChild("Services", true)
+        
+        if services then
+            return services:FindFirstChild(serviceName)
+        end
+        
+        -- ถ้าหาไม่เจอ ให้สแกนหาทั้ง ReplicatedStorage
+        for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
+            if v.Name == serviceName and v:IsA("ModuleScript") or v:IsA("Folder") then
+                return v
+            end
+        end
+    end)
+    return success and result or nil
+end
 
 local promptCache = {}
 local lastFullSearch = 0
@@ -251,9 +272,9 @@ CloseBtn.MouseButton1Click:Connect(function()
 end)
 Instance.new("UICorner", CloseBtn)
 
--- --- ส่วนที่ 4: Main Loop (Fixed StartPortal) --- --
+-- --- ส่วนที่ 4: Main Loop (Ultra Robust Auto Portal) --- --
 task.spawn(function()
-    print("🚀 สคริปต์เริ่มทำงาน (Fixed Auto Portal)")
+    print("🚀 สคริปต์เริ่มทำงาน (Ultra Robust Auto Portal)")
     while not shouldStop() do
         task.wait(LOOP_DELAY)
         local character = player.Character
@@ -274,38 +295,49 @@ task.spawn(function()
         if settings.VegitoEnabled then safeRun("Vegito", runVegito, originalCFrame) end
         if shouldStop() then break end
 
-        -- --- ระบบ Auto Portal ที่แก้ไขแล้ว --- --
         if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
-            local lobbyUi = player.PlayerGui:FindFirstChild("LobbyUi")
-            local portalParty = lobbyUi and lobbyUi:FindFirstChild("PortalParty")
-            
-            -- ตรวจสอบว่ามีปาร์ตี้พอร์ทัลเปิดอยู่หรือไม่ (เช็คทั้ง Enabled และ Visible)
+            -- ค้นหา PortalParty แบบสแกนทั่ว PlayerGui
+            local portalParty = player.PlayerGui:FindFirstChild("PortalParty", true)
             local isPortalActive = portalParty and (portalParty.Enabled or (portalParty:IsA("Frame") and portalParty.Visible))
             
             if not isPortalActive then
-                -- ขั้นตอนที่ 1: กดใช้ไอเทมเพื่อสร้างพอร์ทัล
                 local itemName = settings.PortalName .. "Key" .. settings.Level
-                print("🛠️ กำลังพยายามใช้ไอเทม: " .. itemName)
-                pcall(function()
-                    local knitServices = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
-                    local itemService = knitServices:WaitForChild("ItemService")
-                    itemService:WaitForChild("RF"):WaitForChild("UseItem"):InvokeServer(itemName)
-                end)
-                task.wait(1) -- รอให้พอร์ทัลถูกสร้าง
-            else
-                -- ขั้นตอนที่ 2: กดเริ่มพอร์ทัล
-                print("✅ พบพอร์ทัลแล้ว กำลังสั่งเริ่ม (StartPortal)...")
-                local success, err = pcall(function()
-                    local knitServices = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
-                    local portalService = knitServices:WaitForChild("PortalService")
-                    portalService:WaitForChild("RF"):WaitForChild("StartPortal"):InvokeServer()
-                end)
-                if success then
-                    print("🚀 ส่งคำสั่ง StartPortal สำเร็จ!")
+                print("🛠️ กำลังหา Service เพื่อใช้ไอเทม: " .. itemName)
+                
+                local itemService = getKnitService("ItemService")
+                if itemService then
+                    local rf = itemService:FindFirstChild("UseItem", true)
+                    if rf and rf:IsA("RemoteFunction") then
+                        print("📡 ส่งคำสั่ง UseItem...")
+                        local success, err = pcall(function() rf:InvokeServer(itemName) end)
+                        if not success then warn("❌ UseItem Error: " .. tostring(err)) end
+                    else
+                        warn("❌ ไม่พบ RemoteFunction: UseItem")
+                    end
                 else
-                    warn("❌ ส่งคำสั่ง StartPortal ล้มเหลว: " .. tostring(err))
+                    warn("❌ ไม่พบ ItemService")
                 end
-                task.wait(2) -- ป้องกันการส่งซ้ำเร็วเกินไป
+                task.wait(1.5)
+            else
+                print("✅ พบพอร์ทัลแล้ว กำลังสั่งเริ่ม (StartPortal)...")
+                local portalService = getKnitService("PortalService")
+                if portalService then
+                    local rf = portalService:FindFirstChild("StartPortal", true)
+                    if rf and rf:IsA("RemoteFunction") then
+                        print("🚀 ส่งคำสั่ง StartPortal...")
+                        local success, err = pcall(function() rf:InvokeServer() end)
+                        if success then
+                            print("✨ StartPortal สำเร็จ!")
+                        else
+                            warn("❌ StartPortal Error: " .. tostring(err))
+                        end
+                    else
+                        warn("❌ ไม่พบ RemoteFunction: StartPortal")
+                    end
+                else
+                    warn("❌ ไม่พบ PortalService")
+                end
+                task.wait(2.5)
             end
         end
     end
