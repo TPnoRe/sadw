@@ -103,12 +103,15 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
     -- No additional wait needed for instant prompt activation
 
     if typeof(fireproximityprompt) == "function" then
-        promptInstance.Enabled = false -- Temporarily disable to prevent UI from showing
-        fireproximityprompt(promptInstance)
-        promptInstance.Enabled = originalPromptEnabled -- Restore original state
+        -- วนลูปยิง Prompt จนกว่า Prompt จะหายไป หรือถูกปิดใช้งาน
+        while promptInstance and promptInstance.Parent and promptInstance.Enabled do
+            fireproximityprompt(promptInstance)
+            task.wait(PROMPT_DELAY)
+        end
     end
 
 
+    -- Warp back only after the prompt is no longer active
     hrp.CFrame = originalCFrame
 end
 
