@@ -81,6 +81,7 @@ end
 
 -- ฟังก์ชันหลักสำหรับการกด Prompt (แก้ไข: เพิ่มการตรวจสอบ Parameter)
 local function performPromptAutomation(player, promptInstance, originalCFrame, ancestorClassName)
+    local originalPromptEnabled = promptInstance.Enabled
     -- ตรวจสอบความครบถ้วนของ Parameter เพื่อป้องกัน Error
     if not player or not promptInstance or not originalCFrame or not ancestorClassName then
         warn("⚠️ performPromptAutomation: Missing arguments!")
@@ -99,13 +100,15 @@ local function performPromptAutomation(player, promptInstance, originalCFrame, a
 
     -- เริ่มการทำงาน
     hrp.CFrame = promptPart.CFrame + WARP_OFFSET
-    task.wait(PROMPT_DELAY)
+    -- No additional wait needed for instant prompt activation
 
     if typeof(fireproximityprompt) == "function" then
+        promptInstance.Enabled = false -- Temporarily disable to prevent UI from showing
         fireproximityprompt(promptInstance)
+        promptInstance.Enabled = originalPromptEnabled -- Restore original state
     end
 
-    task.wait(PROMPT_DELAY)
+
     hrp.CFrame = originalCFrame
 end
 
@@ -376,12 +379,5 @@ task.spawn(function()
         game.Players.LocalPlayer.GameplayPaused = false
         if hrp then
 
-            if game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then
-                hrp.CFrame = CFrame.new(targetPos)
-                teleported = true
-            end
-
-            local originalCFrame = hrp.CFrame
-            
-            if settings.ZenoEnabled then                safeRun("Zeno/TimeMachine", runZenoAndTimeMachine, player, origin
+            if game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then                hrp.CFrame = CFrame.new(targetPo
 (Content truncated due to size limit. Use line ranges to read remaining content)
