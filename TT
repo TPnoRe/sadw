@@ -1,4 +1,4 @@
--- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize
+-- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + Fixed Auto Portal
 
 local SCRIPT_NAME = "AutoPromptGui_FinalFix"
 local Players = game:GetService("Players")
@@ -33,7 +33,7 @@ local function loadSettings()
         Level = 1,
         PortalName = "GokuBlack",
         GuiPos = {X = 0.5, XOffset = -90, Y = 0.5, YOffset = -130},
-        IsMinimized = false -- เพิ่มสถานะย่อหน้าจอ
+        IsMinimized = false
     }
     if isfile and isfile(fileName) then
         local success, content = pcall(readfile, fileName)
@@ -133,7 +133,7 @@ local function runVegito(originalCFrame)
     if isPromptReady(vegitoPrompt, true) then performPromptAutomation(vegitoPrompt, originalCFrame, "BasePart") end
 end
 
--- --- ส่วนที่ 3: GUI Construction (Mobile Optimized + Animations + Minimize) --- --
+-- --- ส่วนที่ 3: GUI Construction --- --
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = SCRIPT_NAME
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
@@ -146,7 +146,7 @@ end)
 
 local MainFrame = Instance.new("Frame", ScreenGui)
 local finalSize = UDim2.new(0, 180, 0, 260)
-local minSize = UDim2.new(0, 180, 0, 35) -- ขนาดตอนย่อ (เฉพาะหัวข้อ)
+local minSize = UDim2.new(0, 180, 0, 35)
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
 local p = settings.GuiPos
 MainFrame.Position = UDim2.new(p.X, p.XOffset, p.Y, p.YOffset)
@@ -157,7 +157,6 @@ MainFrame.Draggable = true
 MainFrame.ClipsDescendants = true
 MainFrame.BackgroundTransparency = 1
 
--- ระบบบันทึกตำแหน่ง
 MainFrame:GetPropertyChangedSignal("Position"):Connect(function()
     local pos = MainFrame.Position
     settings.GuiPos = {X = pos.X.Scale, XOffset = pos.X.Offset, Y = pos.Y.Scale, YOffset = pos.Y.Offset}
@@ -168,13 +167,12 @@ local UICorner = Instance.new("UICorner", MainFrame)
 UICorner.CornerRadius = UDim.new(0, 10)
 
 local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, -40, 0, 35) -- เผื่อที่ให้ปุ่มย่อ
+Title.Size = UDim2.new(1, -40, 0, 35)
 Title.Position = UDim2.new(0, 5, 0, 0)
 Title.Text = "Mobile Auto"; Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundTransparency = 1; Title.TextScaled = true; Title.Font = Enum.Font.SourceSansBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- ปุ่มย่อ/ขยาย
 local MinBtn = Instance.new("TextButton", MainFrame)
 MinBtn.Size = UDim2.new(0, 30, 0, 30)
 MinBtn.Position = UDim2.new(1, -35, 0, 2.5)
@@ -190,25 +188,16 @@ local function toggleMinimize()
     isTweening = true
     settings.IsMinimized = not settings.IsMinimized
     saveSettings(settings)
-    
     local targetSize = settings.IsMinimized and minSize or finalSize
     MinBtn.Text = settings.IsMinimized and "+" or "-"
-    
-    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-        Size = targetSize
-    })
+    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize})
     tween:Play()
     tween.Completed:Connect(function() isTweening = false end)
 end
-
 MinBtn.MouseButton1Click:Connect(toggleMinimize)
 
--- แอนิเมชันเปิด UI (โหลดตามสถานะย่อ/ขยาย)
 local startSize = settings.IsMinimized and minSize or finalSize
-local openTween = TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = startSize,
-    BackgroundTransparency = 0
-})
+local openTween = TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = startSize, BackgroundTransparency = 0})
 openTween:Play()
 
 local function createToggleButton(yPos, text, settingKey)
@@ -216,13 +205,11 @@ local function createToggleButton(yPos, text, settingKey)
     btn.Size = UDim2.new(0.9, 0, 0, 35); btn.Position = UDim2.new(0.05, 0, 0, yPos)
     btn.TextScaled = true; btn.Font = Enum.Font.SourceSansBold; btn.TextColor3 = Color3.new(1,1,1)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    
     local function updateBtn()
         local enabled = settings[settingKey]
         btn.Text = text .. " : " .. (enabled and "ON" or "OFF")
         btn.BackgroundColor3 = enabled and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
     end
-    
     btn.MouseButton1Click:Connect(function()
         settings[settingKey] = not settings[settingKey]
         updateBtn(); saveSettings(settings)
@@ -236,19 +223,15 @@ createToggleButton(125, "Auto Portal", "AutoCreateEnabled")
 
 local LvlFrame = Instance.new("Frame", MainFrame)
 LvlFrame.Size = UDim2.new(0.9, 0, 0, 30); LvlFrame.Position = UDim2.new(0.05, 0, 0, 165); LvlFrame.BackgroundTransparency = 1
-
 local LevelDisplay = Instance.new("TextLabel", LvlFrame)
 LevelDisplay.Size = UDim2.new(0.4, 0, 1, 0); LevelDisplay.Position = UDim2.new(0.3, 0, 0, 0)
 LevelDisplay.Text = "Lv "..tostring(settings.Level); LevelDisplay.TextColor3 = Color3.new(1,1,1); LevelDisplay.BackgroundTransparency = 1; LevelDisplay.TextScaled = true
-
 local function updateLevel(delta)
     settings.Level = math.clamp(settings.Level + delta, 1, 4)
     LevelDisplay.Text = "Lv "..tostring(settings.Level); saveSettings(settings)
 end
-
 local PrevLvl = Instance.new("TextButton", LvlFrame); PrevLvl.Size = UDim2.new(0.25, 0, 1, 0); PrevLvl.Position = UDim2.new(0, 0, 0, 0); PrevLvl.Text = "<"; PrevLvl.BackgroundColor3 = Color3.fromRGB(60,60,60); PrevLvl.TextColor3 = Color3.new(1,1,1)
 PrevLvl.MouseButton1Click:Connect(function() updateLevel(-1) end); Instance.new("UICorner", PrevLvl)
-
 local NextLvl = Instance.new("TextButton", LvlFrame); NextLvl.Size = UDim2.new(0.25, 0, 1, 0); NextLvl.Position = UDim2.new(0.75, 0, 0, 0); NextLvl.Text = ">"; NextLvl.BackgroundColor3 = Color3.fromRGB(60,60,60); NextLvl.TextColor3 = Color3.new(1,1,1)
 NextLvl.MouseButton1Click:Connect(function() updateLevel(1) end); Instance.new("UICorner", NextLvl)
 
@@ -262,23 +245,21 @@ local CloseBtn = Instance.new("TextButton", MainFrame)
 CloseBtn.Size = UDim2.new(0.9, 0, 0, 25); CloseBtn.Position = UDim2.new(0.05, 0, 0, 235); CloseBtn.Text = "Stop & Close"
 CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0); CloseBtn.TextColor3 = Color3.new(1,1,1); CloseBtn.TextScaled = true
 CloseBtn.MouseButton1Click:Connect(function()
-    local closeTween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, 0, 0, 0),
-        BackgroundTransparency = 1
-    })
+    local closeTween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1})
     closeTween:Play()
     closeTween.Completed:Connect(function() ScreenGui:Destroy() end)
 end)
 Instance.new("UICorner", CloseBtn)
 
--- --- ส่วนที่ 4: Main Loop --- --
+-- --- ส่วนที่ 4: Main Loop (Fixed StartPortal) --- --
 task.spawn(function()
-    print("🚀 สคริปต์เริ่มทำงาน (Minimize Support)")
+    print("🚀 สคริปต์เริ่มทำงาน (Fixed Auto Portal)")
     while not shouldStop() do
         task.wait(LOOP_DELAY)
         local character = player.Character
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         if not hrp then continue end
+
         if game.PlaceId ~= LOBBY_PLACE_ID then
             local targetPos = Vector3.new(218, 6, -6813)
             if (hrp.Position - targetPos).Magnitude > 15 then
@@ -286,25 +267,45 @@ task.spawn(function()
                 task.wait(0.5)
             end
         end
+
         local originalCFrame = hrp.CFrame
         if settings.ZenoEnabled then safeRun("Zeno", runZeno, originalCFrame) end
         if shouldStop() then break end
         if settings.VegitoEnabled then safeRun("Vegito", runVegito, originalCFrame) end
         if shouldStop() then break end
+
+        -- --- ระบบ Auto Portal ที่แก้ไขแล้ว --- --
         if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
             local lobbyUi = player.PlayerGui:FindFirstChild("LobbyUi")
             local portalParty = lobbyUi and lobbyUi:FindFirstChild("PortalParty")
-            if not (portalParty and portalParty.Enabled) then
+            
+            -- ตรวจสอบว่ามีปาร์ตี้พอร์ทัลเปิดอยู่หรือไม่ (เช็คทั้ง Enabled และ Visible)
+            local isPortalActive = portalParty and (portalParty.Enabled or (portalParty:IsA("Frame") and portalParty.Visible))
+            
+            if not isPortalActive then
+                -- ขั้นตอนที่ 1: กดใช้ไอเทมเพื่อสร้างพอร์ทัล
                 local itemName = settings.PortalName .. "Key" .. settings.Level
+                print("🛠️ กำลังพยายามใช้ไอเทม: " .. itemName)
                 pcall(function()
-                    local knit = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
-                    knit:WaitForChild("ItemService"):WaitForChild("RF"):WaitForChild("UseItem"):InvokeServer(itemName)
+                    local knitServices = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
+                    local itemService = knitServices:WaitForChild("ItemService")
+                    itemService:WaitForChild("RF"):WaitForChild("UseItem"):InvokeServer(itemName)
                 end)
+                task.wait(1) -- รอให้พอร์ทัลถูกสร้าง
             else
-                pcall(function()
-                    local knit = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
-                    knit:WaitForChild("PortalService"):WaitForChild("RF"):WaitForChild("StartPortal"):InvokeServer()
+                -- ขั้นตอนที่ 2: กดเริ่มพอร์ทัล
+                print("✅ พบพอร์ทัลแล้ว กำลังสั่งเริ่ม (StartPortal)...")
+                local success, err = pcall(function()
+                    local knitServices = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_knit@1.7.0"):WaitForChild("knit"):WaitForChild("Services")
+                    local portalService = knitServices:WaitForChild("PortalService")
+                    portalService:WaitForChild("RF"):WaitForChild("StartPortal"):InvokeServer()
                 end)
+                if success then
+                    print("🚀 ส่งคำสั่ง StartPortal สำเร็จ!")
+                else
+                    warn("❌ ส่งคำสั่ง StartPortal ล้มเหลว: " .. tostring(err))
+                end
+                task.wait(2) -- ป้องกันการส่งซ้ำเร็วเกินไป
             end
         end
     end
