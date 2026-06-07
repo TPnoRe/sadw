@@ -1,10 +1,12 @@
--- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่นแก้ไข Error สมบูรณ์แบบ
+-- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่นแก้ไข Error สมบูรณ์แบบ พร้อม GUI ที่ลากได้และ Responsive
 -- ปรับปรุง: แก้ไขการส่งพารามิเตอร์ให้ครบถ้วนในทุกฟังก์ชัน เพื่อป้องกัน Argument missing error
+-- เพิ่มเติม: GUI สามารถลากเลื่อนได้ และปรับขนาดให้เหมาะสมกับหน้าจอมือถือ
 
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local LOBBY_PLACE_ID = 133410800847665
@@ -216,27 +218,80 @@ ScreenGui.Parent = player:WaitForChild("PlayerGui")
 ScreenGui.ResetOnSpawn = false
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 220, 0, 320)
-MainFrame.Position = UDim2.new(0, 20, 0, 20)
+-- ปรับขนาดและตำแหน่งให้ Responsive มากขึ้น
+MainFrame.Size = UDim2.new(0.3, 0, 0.5, 0) -- 30% ของความกว้างหน้าจอ, 50% ของความสูงหน้าจอ
+MainFrame.Position = UDim2.new(0.5, -MainFrame.Size.X.Scale * ScreenGui.AbsoluteSize.X / 2, 0.5, -MainFrame.Size.Y.Scale * ScreenGui.AbsoluteSize.Y / 2) -- จัดกึ่งกลาง
 MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MainFrame.BorderSizePixel = 2
 
+-- เพิ่ม UIAspectRatioConstraint เพื่อรักษาอัตราส่วนของ Frame
+local aspectRatioConstraint = Instance.new("UIAspectRatioConstraint", MainFrame)
+aspectRatioConstraint.AspectRatio = MainFrame.Size.X.Scale / MainFrame.Size.Y.Scale
+aspectRatioConstraint.AspectType = Enum.AspectType.FitWithinMaxSize
+
+-- เพิ่ม UIListLayout สำหรับจัดเรียงปุ่มและองค์ประกอบอื่นๆ โดยอัตโนมัติ
+local listLayout = Instance.new("UIListLayout", MainFrame)
+listLayout.FillDirection = Enum.FillDirection.Vertical
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+listLayout.Padding = UDim.new(0, 5) -- ระยะห่างระหว่างองค์ประกอบ
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
 local Title = Instance.new("TextLabel", MainFrame)
+Title.Name = "TitleBar"
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.Text = "Fixed Automation"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 Title.TextScaled = true
 Title.Font = Enum.Font.SourceSansBold
+Title.LayoutOrder = 1 -- กำหนดลำดับใน UIListLayout
 
-local function createToggleButton(name, yPos, text, settingKey)
+-- ทำให้ GUI ลากได้
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPos = MainFrame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input == dragInput then
+        dragging = false
+    end
+end)
+
+local function createToggleButton(name, text, settingKey, layoutOrder)
     local btn = Instance.new("TextButton", MainFrame)
     btn.Name = name
     btn.Size = UDim2.new(0.9, 0, 0, 40)
-    btn.Position = UDim2.new(0.05, 0, 0, yPos)
     btn.TextScaled = true
     btn.Font = Enum.Font.SourceSansBold
     btn.TextColor3 = Color3.new(1,1,1)
+    btn.LayoutOrder = layoutOrder -- กำหนดลำดับใน UIListLayout
     
     local function updateBtn()
         local enabled = settings[settingKey]
@@ -257,35 +312,55 @@ local function createToggleButton(name, yPos, text, settingKey)
     return btn
 end
 
-createToggleButton("ZenoToggle", 50, "Zeno / TM", "ZenoEnabled")
-createToggleButton("VegitoToggle", 100, "Vegito Defense", "VegitoEnabled")
-createToggleButton("AutoCreateToggle", 150, "Auto Create & Start", "AutoCreateEnabled")
+createToggleButton("ZenoToggle", "Zeno / TM", "ZenoEnabled", 2)
+createToggleButton("VegitoToggle", "Vegito Defense", "VegitoEnabled", 3)
+createToggleButton("AutoCreateToggle", "Auto Create & Start", "AutoCreateEnabled", 4)
 
-local LevelDisplay = Instance.new("TextLabel", MainFrame)
-LevelDisplay.Size = UDim2.new(0.4, 0, 0, 30); LevelDisplay.Position = UDim2.new(0.3, 0, 0, 200)
+-- Group for Level controls to keep them together
+local LevelControlFrame = Instance.new("Frame", MainFrame)
+LevelControlFrame.Size = UDim2.new(0.9, 0, 0, 40)
+LevelControlFrame.BackgroundTransparency = 1
+LevelControlFrame.LayoutOrder = 5
+
+local levelListLayout = Instance.new("UIListLayout", LevelControlFrame)
+levelListLayout.FillDirection = Enum.FillDirection.Horizontal
+levelListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+levelListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+levelListLayout.Padding = UDim.new(0, 5)
+levelListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local PrevLvl = Instance.new("TextButton", LevelControlFrame)
+PrevLvl.Size = UDim2.new(0.2, 0, 1, 0); PrevLvl.Text = "<"
+PrevLvl.LayoutOrder = 1
+
+local LevelDisplay = Instance.new("TextLabel", LevelControlFrame)
+LevelDisplay.Size = UDim2.new(0.5, 0, 1, 0)
 LevelDisplay.Text = "Level "..tostring(settings.Level); LevelDisplay.TextColor3 = Color3.new(1,1,1); LevelDisplay.BackgroundTransparency = 1; LevelDisplay.TextScaled = true
+LevelDisplay.LayoutOrder = 2
+
+local NextLvl = Instance.new("TextButton", LevelControlFrame)
+NextLvl.Size = UDim2.new(0.2, 0, 1, 0); NextLvl.Text = ">"
+NextLvl.LayoutOrder = 3
 
 local function updateLevel(delta)
     settings.Level = math.clamp(settings.Level + delta, 1, 4)
     LevelDisplay.Text = "Level "..tostring(settings.Level); saveSettings(settings)
 end
 
-local PrevLvl = Instance.new("TextButton", MainFrame)
-PrevLvl.Size = UDim2.new(0.1, 0, 0, 30); PrevLvl.Position = UDim2.new(0.15, 0, 0, 200); PrevLvl.Text = "<"
 PrevLvl.MouseButton1Click:Connect(function() updateLevel(-1) end)
-
-local NextLvl = Instance.new("TextButton", MainFrame)
-NextLvl.Size = UDim2.new(0.1, 0, 0, 30); NextLvl.Position = UDim2.new(0.75, 0, 0, 200); NextLvl.Text = ">"
 NextLvl.MouseButton1Click:Connect(function() updateLevel(1) end)
 
 local PortalInput = Instance.new("TextBox", MainFrame)
-PortalInput.Size = UDim2.new(0.9, 0, 0, 40); PortalInput.Position = UDim2.new(0.05, 0, 0, 240)
-PortalInput.Text = settings.PortalName; PortalInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60); PortalInput.TextColor3 = Color3.new(1,1,1); PortalInput.TextScaled = true
+PortalInput.Size = UDim2.new(0.9, 0, 0, 40); PortalInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60); PortalInput.TextColor3 = Color3.new(1,1,1); PortalInput.TextScaled = true
+PortalInput.Text = settings.PortalName
+PortalInput.PlaceholderText = "Portal Name"
 PortalInput.FocusLost:Connect(function() settings.PortalName = PortalInput.Text; saveSettings(settings) end)
+PortalInput.LayoutOrder = 6
 
 local CloseBtn = Instance.new("TextButton", MainFrame)
-CloseBtn.Size = UDim2.new(0.9, 0, 0, 30); CloseBtn.Position = UDim2.new(0.05, 0, 0, 285); CloseBtn.Text = "Close Menu"
+CloseBtn.Size = UDim2.new(0.9, 0, 0, 30); CloseBtn.Text = "Close Menu"
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+CloseBtn.LayoutOrder = 7
 
 -- --- ส่วนที่ 4: ลูปหลักของ Automation --- --
 
@@ -308,15 +383,5 @@ task.spawn(function()
 
             local originalCFrame = hrp.CFrame
             
-            if settings.ZenoEnabled then
-                safeRun("Zeno/TimeMachine", runZenoAndTimeMachine, player, originalCFrame)
-            end
-            if settings.VegitoEnabled then
-                safeRun("VegitoDefense", runVegitoDefense, player, originalCFrame)
-            end
-            if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
-                safeRun("AutoCreateAndStartPortal", runAutoCreateAndStartPortal)
-            end
-        end
-    end
-end)
+            if settings.ZenoEnabled then                safeRun("Zeno/TimeMachine", runZenoAndTimeMachine, player, origin
+(Content truncated due to size limit. Use line ranges to read remaining content)
