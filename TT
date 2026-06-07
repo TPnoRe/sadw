@@ -1,5 +1,3 @@
--- สคริปต์ Lua สำหรับ Roblox: เวอร์ชั่น Mobile Friendly + Save UI Position + Animations + Minimize + On-Screen Logs
-
 local SCRIPT_NAME = "AutoPromptGui_FinalFix"
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -8,7 +6,38 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 
+-- ระบบ Log บนหน้าจอ (Defined early to ensure all logs work)
+local logEntries = {}
+local MAX_LOGS = 5
+local logContainer
+
+local function addLog(text, color)
+    if not logContainer then 
+        print("[LOG - Pre-GUI]: " .. text)
+        return 
+    end
+    color = color or Color3.new(1,1,1)
+    table.insert(logEntries, {text = text, color = color})
+    if #logEntries > MAX_LOGS then table.remove(logEntries, 1) end
+    
+    local fullText = ""
+    for i, entry in ipairs(logEntries) do
+        fullText = fullText .. entry.text .. "\n"
+    end
+    logContainer.Text = fullText
+    print("[LOG]: " .. text)
+end
+
+local lastLoggedState = {}
+local function addLogOnce(key, text, color)
+    if lastLoggedState[key] ~= text then
+        addLog(text, color)
+        lastLoggedState[key] = text
+    end
+end
+
 -- --- ส่วนที่ 0: ระบบป้องกันการรันซ้ำและ Cleanup --- --
+addLogOnce("script_init", "🚀 Script Started!", Color3.new(1, 1, 0))
 if _G[SCRIPT_NAME .. "_Running"] then
     _G[SCRIPT_NAME .. "_Stop"] = true
     task.wait(0.3)
@@ -51,7 +80,9 @@ local function loadSettings()
 end
 
 local function saveSettings(data)
-    if writefile then pcall(writefile, fileName, HttpService:JSONEncode(data)) end
+    if writefile then 
+        pcall(writefile, fileName, HttpService:JSONEncode(data))
+    end
 end
 
 local settings = loadSettings()
@@ -63,26 +94,6 @@ local ACTION_DELAY = 0.5
 local WARP_OFFSET = Vector3.new(0, 0, 2)
 local LOBBY_PLACE_ID = 133410800847665
 
--- ระบบ Log บนหน้าจอ
-local logEntries = {}
-local MAX_LOGS = 5
-local logContainer
-
-local function addLog(text, color)
-    if not logContainer then return end
-    color = color or Color3.new(1,1,1)
-    table.insert(logEntries, {text = text, color = color})
-    if #logEntries > MAX_LOGS then table.remove(logEntries, 1) end
-    
-    local fullText = ""
-    for i, entry in ipairs(logEntries) do
-        fullText = fullText .. entry.text .. "\n"
-    end
-    logContainer.Text = fullText
-    print("[LOG]: " .. text) -- ยังคงพิมพ์ใน F9 ด้วย
-end
-
--- ระบบค้นหา Knit Service
 local function getKnitService(serviceName)
     local success, result = pcall(function()
         local services = ReplicatedStorage:FindFirstChild("Services", true) or 
@@ -93,6 +104,7 @@ local function getKnitService(serviceName)
                 return v
             end
         end
+        return nil
     end)
     return success and result or nil
 end
@@ -128,7 +140,10 @@ end
 
 local function safeRun(taskName, taskFunction, ...)
     local success, err = xpcall(taskFunction, function(message) return debug.traceback(message) end, ...)
-    if not success then addLog("❌ " .. taskName .. " Error", Color3.new(1,0,0)) end
+    if not success then 
+        addLogOnce("error_" .. taskName, "❌ " .. taskName .. " Error: " .. tostring(err), Color3.new(1,0,0)) 
+    end
+    return success
 end
 
 local function performPromptAutomation(promptInstance, originalCFrame, ancestorClassName)
@@ -137,9 +152,13 @@ local function performPromptAutomation(promptInstance, originalCFrame, ancestorC
     if not hrp or not promptInstance then return end
     local promptPart = promptInstance:FindFirstAncestorWhichIsA(ancestorClassName)
     if not promptPart then return end
+    
+    addLog("🌀 กำลังทำงาน: " .. promptInstance.Name, Color3.new(0.5, 1, 1))
     hrp.CFrame = promptPart.CFrame + WARP_OFFSET
     task.wait(PROMPT_DELAY)
-    if typeof(fireproximityprompt) == "function" then fireproximityprompt(promptInstance) end
+    if typeof(fireproximityprompt) == "function" then 
+        fireproximityprompt(promptInstance) 
+    end
     task.wait(PROMPT_DELAY)
     hrp.CFrame = originalCFrame
 end
@@ -172,6 +191,41 @@ local function runVegito(originalCFrame)
     end
 end
 
+local lastPortalActionTime = 0
+local PORTAL_ACTION_COOLDOWN = 5
+
+local function handleAutoCreatePortal()
+    local portalParty = player.PlayerGui:FindFirstChild("PortalParty", true)
+    local isPortalActive = portalParty and (portalParty.Enabled or (portalParty:IsA("Frame") and portalParty.Visible))
+    
+    if not isPortalActive then
+        if tick() - lastPortalActionTime < PORTAL_ACTION_COOLDOWN then return end
+        local itemName = settings.PortalName .. "Key" .. settings.Level
+        local itemService = getKnitService("ItemService")
+        if itemService then
+            local rf = itemService:FindFirstChild("UseItem", true)
+            if rf then
+                addLog("🛠️ กำลังสร้าง Portal: " .. itemName, Color3.new(0.5, 0.8, 0.5))
+                local success, err = pcall(function() rf:InvokeServer(itemName) end)
+                if success then lastPortalActionTime = tick() end
+            end
+        end
+        task.wait(1.5)
+    else
+        if tick() - lastPortalActionTime < PORTAL_ACTION_COOLDOWN then return end
+        local portalService = getKnitService("PortalService")
+        if portalService then
+            local rf = portalService:FindFirstChild("StartPortal", true)
+            if rf then
+                addLog("🚀 กำลังเริ่ม Portal...", Color3.new(0, 1, 1))
+                local success, err = pcall(function() rf:InvokeServer() end)
+                if success then lastPortalActionTime = tick() end
+            end
+        end
+        task.wait(2.5)
+    end
+end
+
 -- --- ส่วนที่ 3: GUI Construction --- --
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = SCRIPT_NAME
@@ -184,7 +238,7 @@ ScreenGui.Destroying:Connect(function()
 end)
 
 local MainFrame = Instance.new("Frame", ScreenGui)
-local finalSize = UDim2.new(0, 180, 0, 340) -- เพิ่มความสูงเพื่อรองรับ Log
+local finalSize = UDim2.new(0, 180, 0, 340)
 local minSize = UDim2.new(0, 180, 0, 35)
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
 local p = settings.GuiPos
@@ -224,12 +278,14 @@ local function toggleMinimize()
     if isTweening then return end
     isTweening = true
     settings.IsMinimized = not settings.IsMinimized
-    saveSettings(settings)
-    local targetSize = settings.IsMinimized and minSize or finalSize
     MinBtn.Text = settings.IsMinimized and "+" or "-"
-    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = targetSize})
+    local targetSize = settings.IsMinimized and minSize or finalSize
+    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize})
     tween:Play()
-    tween.Completed:Connect(function() isTweening = false end)
+    tween.Completed:Connect(function() 
+        isTweening = false 
+        saveSettings(settings)
+    end)
 end
 MinBtn.MouseButton1Click:Connect(toggleMinimize)
 
@@ -237,126 +293,133 @@ local startSize = settings.IsMinimized and minSize or finalSize
 local openTween = TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = startSize, BackgroundTransparency = 0})
 openTween:Play()
 
-local function createToggleButton(yPos, text, settingKey)
-    local btn = Instance.new("TextButton", MainFrame)
-    btn.Size = UDim2.new(0.9, 0, 0, 35); btn.Position = UDim2.new(0.05, 0, 0, yPos)
-    btn.TextScaled = true; btn.Font = Enum.Font.SourceSansBold; btn.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+local function createToggleBtn(text, yPos, settingKey)
+    local Btn = Instance.new("TextButton", MainFrame)
+    Btn.Size = UDim2.new(1, -10, 0, 30)
+    Btn.Position = UDim2.new(0, 5, 0, yPos)
+    Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Btn.TextColor3 = Color3.new(1,1,1); Btn.TextScaled = true; Btn.Font = Enum.Font.SourceSansBold
+    Instance.new("UICorner", Btn)
+    
     local function updateBtn()
         local enabled = settings[settingKey]
-        btn.Text = text .. " : " .. (enabled and "ON" or "OFF")
-        btn.BackgroundColor3 = enabled and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+        Btn.Text = text .. ": " .. (enabled and "ON" or "OFF")
+        Btn.BackgroundColor3 = enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
     end
-    btn.MouseButton1Click:Connect(function()
-        settings[settingKey] = not settings[settingKey]
-        updateBtn(); saveSettings(settings)
-    end)
     updateBtn()
+    
+    Btn.MouseButton1Click:Connect(function()
+        settings[settingKey] = not settings[settingKey]
+        updateBtn()
+        saveSettings(settings)
+        addLog("⚙️ " .. text .. ": " .. (settings[settingKey] and "ON" or "OFF"), Color3.new(1, 1, 1))
+    end)
+    return Btn
 end
 
-createToggleButton(45, "Zeno/TM", "ZenoEnabled")
-createToggleButton(85, "Vegito", "VegitoEnabled")
-createToggleButton(125, "Auto Portal", "AutoCreateEnabled")
+createToggleBtn("Auto Zeno", 40, "ZenoEnabled")
+createToggleBtn("Auto Vegito", 75, "VegitoEnabled")
+createToggleBtn("Auto Create Portal", 110, "AutoCreateEnabled")
 
-local LvlFrame = Instance.new("Frame", MainFrame)
-LvlFrame.Size = UDim2.new(0.9, 0, 0, 30); LvlFrame.Position = UDim2.new(0.05, 0, 0, 165); LvlFrame.BackgroundTransparency = 1
-local LevelDisplay = Instance.new("TextLabel", LvlFrame)
-LevelDisplay.Size = UDim2.new(0.4, 0, 1, 0); LevelDisplay.Position = UDim2.new(0.3, 0, 0, 0)
-LevelDisplay.Text = "Lv "..tostring(settings.Level); LevelDisplay.TextColor3 = Color3.new(1,1,1); LevelDisplay.BackgroundTransparency = 1; LevelDisplay.TextScaled = true
+local LevelFrame = Instance.new("Frame", MainFrame)
+LevelFrame.Size = UDim2.new(1, -10, 0, 30)
+LevelFrame.Position = UDim2.new(0, 5, 0, 145)
+LevelFrame.BackgroundTransparency = 1
+
+local LvlLabel = Instance.new("TextLabel", LevelFrame)
+LvlLabel.Size = UDim2.new(0.5, 0, 1, 0)
+LvlLabel.Position = UDim2.new(0.25, 0, 0, 0)
+LvlLabel.Text = "Level: " .. settings.Level
+LvlLabel.TextColor3 = Color3.new(1,1,1); LvlLabel.BackgroundTransparency = 1; LvlLabel.TextScaled = true
+
 local function updateLevel(delta)
-    settings.Level = math.clamp(settings.Level + delta, 1, 4)
-    LevelDisplay.Text = "Lv "..tostring(settings.Level); saveSettings(settings)
+    settings.Level = math.clamp(settings.Level + delta, 1, 6)
+    LvlLabel.Text = "Level: " .. settings.Level
+    saveSettings(settings)
+    addLog("📊 Level Updated: " .. settings.Level, Color3.new(1, 0.8, 0.3))
 end
-local PrevLvl = Instance.new("TextButton", LvlFrame); PrevLvl.Size = UDim2.new(0.25, 0, 1, 0); PrevLvl.Position = UDim2.new(0, 0, 0, 0); PrevLvl.Text = "<"; PrevLvl.BackgroundColor3 = Color3.fromRGB(60,60,60); PrevLvl.TextColor3 = Color3.new(1,1,1)
-PrevLvl.MouseButton1Click:Connect(function() updateLevel(-1) end); Instance.new("UICorner", PrevLvl)
-local NextLvl = Instance.new("TextButton", LvlFrame); NextLvl.Size = UDim2.new(0.25, 0, 1, 0); NextLvl.Position = UDim2.new(0.75, 0, 0, 0); NextLvl.Text = ">"; NextLvl.BackgroundColor3 = Color3.fromRGB(60,60,60); NextLvl.TextColor3 = Color3.new(1,1,1)
-NextLvl.MouseButton1Click:Connect(function() updateLevel(1) end); Instance.new("UICorner", NextLvl)
+
+local PrevBtn = Instance.new("TextButton", LevelFrame)
+PrevBtn.Size = UDim2.new(0.2, 0, 1, 0)
+PrevBtn.Text = "<"; PrevBtn.BackgroundColor3 = Color3.fromRGB(60,60,60); PrevBtn.TextColor3 = Color3.new(1,1,1); PrevBtn.TextScaled = true
+Instance.new("UICorner", PrevBtn)
+PrevBtn.MouseButton1Click:Connect(function() updateLevel(-1) end)
+
+local NextBtn = Instance.new("TextButton", LevelFrame)
+NextBtn.Size = UDim2.new(0.2, 0, 1, 0)
+NextBtn.Position = UDim2.new(0.8, 0, 0, 0)
+NextBtn.Text = ">"; NextBtn.BackgroundColor3 = Color3.fromRGB(60,60,60); NextBtn.TextColor3 = Color3.new(1,1,1); NextBtn.TextScaled = true
+Instance.new("UICorner", NextBtn)
+NextBtn.MouseButton1Click:Connect(function() updateLevel(1) end)
 
 local PortalInput = Instance.new("TextBox", MainFrame)
-PortalInput.Size = UDim2.new(0.9, 0, 0, 30); PortalInput.Position = UDim2.new(0.05, 0, 0, 200)
-PortalInput.Text = settings.PortalName; PortalInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40); PortalInput.TextColor3 = Color3.new(1,1,1); PortalInput.TextScaled = true
-PortalInput.FocusLost:Connect(function() settings.PortalName = PortalInput.Text; saveSettings(settings) end)
+PortalInput.Size = UDim2.new(1, -10, 0, 30)
+PortalInput.Position = UDim2.new(0, 5, 0, 180)
+PortalInput.Text = settings.PortalName
+PortalInput.PlaceholderText = "Portal Name (e.g. GokuBlack)"
+PortalInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+PortalInput.TextColor3 = Color3.new(1,1,1); PortalInput.TextScaled = true
 Instance.new("UICorner", PortalInput)
+PortalInput.FocusLost:Connect(function()
+    settings.PortalName = PortalInput.Text
+    saveSettings(settings)
+    addLog("📝 Portal Name: " .. settings.PortalName, Color3.new(1, 1, 1))
+end)
 
 local CloseBtn = Instance.new("TextButton", MainFrame)
-CloseBtn.Size = UDim2.new(0.9, 0, 0, 25); CloseBtn.Position = UDim2.new(0.05, 0, 0, 235); CloseBtn.Text = "Stop & Close"
-CloseBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0); CloseBtn.TextColor3 = Color3.new(1,1,1); CloseBtn.TextScaled = true
-CloseBtn.MouseButton1Click:Connect(function()
-    local closeTween = TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1})
-    closeTween:Play()
-    closeTween.Completed:Connect(function() ScreenGui:Destroy() end)
-end)
+CloseBtn.Size = UDim2.new(1, -10, 0, 30)
+CloseBtn.Position = UDim2.new(0, 5, 0, 215)
+CloseBtn.Text = "Close Script"
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseBtn.TextColor3 = Color3.new(1,1,1); CloseBtn.TextScaled = true; CloseBtn.Font = Enum.Font.SourceSansBold
 Instance.new("UICorner", CloseBtn)
+CloseBtn.MouseButton1Click:Connect(function()
+    _G[SCRIPT_NAME .. "_Stop"] = true
+    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.3), {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1})
+    tween:Play()
+    tween.Completed:Connect(function() ScreenGui:Destroy() end)
+end)
 
--- หน้าต่าง Log
 logContainer = Instance.new("TextLabel", MainFrame)
-logContainer.Size = UDim2.new(0.9, 0, 0, 70)
-logContainer.Position = UDim2.new(0.05, 0, 0, 265)
-logContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-logContainer.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-logContainer.TextSize = 10; logContainer.Font = Enum.Font.Code
-logContainer.Text = "Logs will appear here..."; logContainer.TextYAlignment = Enum.TextYAlignment.Top; logContainer.TextXAlignment = Enum.TextXAlignment.Left
+logContainer.Size = UDim2.new(1, -10, 0, 80)
+logContainer.Position = UDim2.new(0, 5, 0, 250)
+logContainer.BackgroundTransparency = 0.5
+logContainer.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+logContainer.TextColor3 = Color3.new(1, 1, 1)
+logContainer.TextSize = 10
+logContainer.TextXAlignment = Enum.TextXAlignment.Left
+logContainer.TextYAlignment = Enum.TextYAlignment.Top
+logContainer.TextWrapped = true
+logContainer.Text = "Logs will appear here..."
 Instance.new("UICorner", logContainer)
 
 -- --- ส่วนที่ 4: Main Loop --- --
 task.spawn(function()
-    addLog("🚀 Script Started!", Color3.new(1, 1, 0))
     while not shouldStop() do
         task.wait(LOOP_DELAY)
+        
         local character = player.Character
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         if not hrp then continue end
-
+        
+        local originalCFrame = hrp.CFrame
+        
         if game.PlaceId ~= LOBBY_PLACE_ID then
             local targetPos = Vector3.new(218, 6, -6813)
-            if (hrp.Position - targetPos).Magnitude > 15 then
+            if (hrp.Position - targetPos).Magnitude > 10 then
                 hrp.CFrame = CFrame.new(targetPos)
                 task.wait(0.5)
             end
         end
 
-        local originalCFrame = hrp.CFrame
         if settings.ZenoEnabled then safeRun("Zeno", runZeno, originalCFrame) end
         if shouldStop() then break end
+        
         if settings.VegitoEnabled then safeRun("Vegito", runVegito, originalCFrame) end
         if shouldStop() then break end
 
         if settings.AutoCreateEnabled and game.PlaceId == LOBBY_PLACE_ID then
-            local portalParty = player.PlayerGui:FindFirstChild("PortalParty", true)
-            local isPortalActive = portalParty and (portalParty.Enabled or (portalParty:IsA("Frame") and portalParty.Visible))
-            
-            if not isPortalActive then
-                local itemName = settings.PortalName .. "Key" .. settings.Level
-                local itemService = getKnitService("ItemService")
-                if itemService then
-                    local rf = itemService:FindFirstChild("UseItem", true)
-                    if rf then
-                        addLog("🛠️ Using Item: " .. itemName)
-                        pcall(function() rf:InvokeServer(itemName) end)
-                    else
-                        addLog("❌ RF UseItem not found", Color3.new(1, 0, 0))
-                    end
-                else
-                    addLog("❌ ItemService not found", Color3.new(1, 0, 0))
-                end
-                task.wait(1.5)
-            else
-                local portalService = getKnitService("PortalService")
-                if portalService then
-                    local rf = portalService:FindFirstChild("StartPortal", true)
-                    if rf then
-                        addLog("🚀 Starting Portal...", Color3.new(0, 1, 0))
-                        local success, err = pcall(function() rf:InvokeServer() end)
-                        if success then addLog("✨ Started Successfully!", Color3.new(0, 1, 1))
-                        else addLog("❌ Start Error", Color3.new(1, 0, 0)) end
-                    else
-                        addLog("❌ RF StartPortal not found", Color3.new(1, 0, 0))
-                    end
-                else
-                    addLog("❌ PortalService not found", Color3.new(1, 0, 0))
-                end
-                task.wait(2.5)
-            end
+            handleAutoCreatePortal()
         end
     end
 end)
