@@ -298,7 +298,7 @@ task.spawn(function()
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
         local targetPos = Vector3.new(218, 6, -6813)
         local teleported = false
-
+        game.Players.LocalPlayer.GameplayPaused = false
         if hrp then
 
             if game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then
