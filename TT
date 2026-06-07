@@ -406,7 +406,7 @@ task.spawn(function()
         
         if game.PlaceId ~= LOBBY_PLACE_ID then
             local targetPos = Vector3.new(218, 6, -6813)
-            if (hrp.Position - targetPos).Magnitude > 10 then
+            if (hrp.Position - targetPos).Magnitude > 15 then
                 hrp.CFrame = CFrame.new(targetPos)
                 task.wait(0.5)
             end
