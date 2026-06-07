@@ -301,10 +301,9 @@ task.spawn(function()
 
         if hrp then
 
-            if not teleported and (hrp.Position - targetPos).Magnitude > 10 then
+            if game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then
                 hrp.CFrame = CFrame.new(targetPos)
                 teleported = true
-                print("วาปครั้งเดียวเรียบร้อย")
             end
 
             local originalCFrame = hrp.CFrame
