@@ -301,7 +301,7 @@ task.spawn(function()
 
         if hrp then
 
-            if game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then
+            if not game.PlaceId == LOBBY_PLACE_ID and not teleported and (hrp.Position - targetPos).Magnitude > 10 then
                 hrp.CFrame = CFrame.new(targetPos)
                 teleported = true
             end
