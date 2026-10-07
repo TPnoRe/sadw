@@ -1,5 +1,5 @@
 -- ==============================================================================
--- QuantumOnyxGUI.lua  (OXIASIDIAN deck ตามภาพอ้างอิง, mobile-safe, compact)
+-- GUI.lua  (OXIASIDIAN deck ตามภาพอ้างอิง, mobile-safe, compact)
 -- เข้ากับ MainScript_Original.lua แบบ drop-in (ไม่ต้องแก้ MainScript)
 -- เลย์เอาต์ตามภาพ: header จุดม่วง + OXIASIDIAN / Blox Fruit · v.Premium,
 --   nav ซ้าย (NAVIGATION + tab มีแถบ accent เมื่อ active + Config แยกด้านล่าง),
@@ -36,7 +36,7 @@
 
 local Library = {}
 Library.Version = "3.1.1"
-Library.Name = "QuantumOnyxGUI"
+Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
 local Players = game:GetService("Players")
@@ -788,8 +788,8 @@ function Library:CreateWindow(...)
 		end
 	end
 	function Window:Open(...) self:_ApplyVisible(true) end
+	-- ซ่อน UI อย่างเดียว ไม่ดับฟังก์ชัน (OnStopAll ย้ายไปอยู่ใน Destroy + ปุ่ม Stop All)
 	function Window:Close(...)
-		if isFn(self._onStopAll) then pcall(self._onStopAll) end
 		self:_ApplyVisible(false)
 	end
 	function Window:Toggle(...)
@@ -1225,6 +1225,89 @@ function Library:CreateWindow(...)
 					return comp
 				end
 				Menu.AddButton, Menu.CreateButton, Menu.addbutton = Menu.addButton, Menu.addButton, Menu.addButton
+
+				-- ---- ButtonGrid (2 คอลัมน์, แบบ Fake Admin: {Label, Callback}) ----
+				Menu.addButtonGrid = function(...)
+					local a = Pack(Menu, ...)
+					local items = nil
+					for i = 1, a.n do
+						if isTbl(a[i]) then items = a[i] break end
+					end
+					if not isTbl(items) then items = {} end
+					local wrap = New("Frame", { Size = UDim2.new(1, 0, 0, 0),
+						BackgroundTransparency = 1, LayoutOrder = NextOrder() }, box)
+					List(wrap, 4)
+					local comp = { _window = Window, _box = wrap, _conns = {}, Type = "ButtonGrid" }
+					local function MakeBtn(text, cb, locked, parent, w)
+						local b = New("TextButton", { Size = w,
+							BackgroundColor3 = Window._theme.Surface, Text = toStr(text),
+							Font = Enum.Font.GothamBold, TextSize = 12,
+							TextColor3 = locked and Window._theme.TextDim or Window._theme.Text }, parent)
+						Corner(b, 5)
+						Stroke(b, Window._theme.BorderSoft, 1)
+						Track(comp, b.MouseButton1Click:Connect(function()
+							if locked then return end
+							if isFn(cb) then task.spawn(function() pcall(cb) end) end
+						end))
+						return b
+					end
+					local function Build(list)
+						for _, ch in ipairs(wrap:GetChildren()) do
+							if ch:IsA("GuiObject") then pcall(function() ch:Destroy() end) end
+						end
+						local n = #list
+						local rows = math.ceil(n / 2)
+						if rows < 1 then rows = 1 end
+						for r = 1, rows do
+							local rowF = New("Frame", { Size = UDim2.new(1, 0, 0, 30),
+								BackgroundTransparency = 1, LayoutOrder = r }, wrap)
+							local e1 = list[(r - 1) * 2 + 1]
+							local e2 = list[(r - 1) * 2 + 2]
+							local function Parse(e)
+								if isStr(e) then return e, nil, false end
+								if isTbl(e) then
+									return toStr(e.Label or e.Text or e.Title or e.Name or "Button"),
+										(e.Callback or e.callback or e.Func or e.func or e.OnClick),
+										(e.locked == true or e.Locked == true)
+								end
+								return "Button", nil, false
+							end
+							if e1 ~= nil then
+								local t1, c1, l1 = Parse(e1)
+								if e2 == nil then
+									MakeBtn(t1, c1, l1, rowF, UDim2.new(1, 0, 0, 30))
+								else
+									local t2, c2, l2 = Parse(e2)
+									MakeBtn(t1, c1, l1, rowF, UDim2.new(0.5, -2, 0, 30))
+									local b2 = MakeBtn(t2, c2, l2, rowF, UDim2.new(0.5, -2, 0, 30))
+									b2.Position = UDim2.new(0.5, 2, 0, 0)
+								end
+							end
+						end
+						wrap.Size = UDim2.new(1, 0, 0, rows * 30 + math.max(0, rows - 1) * 4)
+					end
+					Build(items)
+					comp.Refresh = function(a2, b2)
+						local v = (b2 ~= nil and b2 or a2)
+						if v == comp then return end
+						if isTbl(v) then Build(v) end
+					end
+					comp.SetOptions = comp.Refresh
+					comp.Destroy = function() DisconnectAll(comp) pcall(function() wrap:Destroy() end) end
+					OnTheme(function(t)
+						for _, d in ipairs(wrap:GetDescendants()) do
+							if d:IsA("TextButton") then
+								d.BackgroundColor3 = t.Surface
+								d.TextColor3 = t.Text
+							end
+						end
+					end)
+					AddChild(Menu, comp)
+					AddChild(Window, comp)
+					return comp
+				end
+				Menu.AddButtonGrid, Menu.CreateButtonGrid = Menu.addButtonGrid, Menu.addButtonGrid
+				Menu.addGrid, Menu.AddGrid, Menu.addgrid = Menu.addButtonGrid, Menu.addButtonGrid, Menu.addButtonGrid
 
 				-- ---- Slider (compact, touch drag) ----
 				Menu.addSlider = function(...)
@@ -2224,6 +2307,12 @@ function Library:CreateWindow(...)
 		hk:addKeybind("Toggle UI Key", "RightShift", function()
 			Window:Toggle()
 		end, nil, "UIToggleKey")
+		hk:addButton("Stop All Functions", function()
+			if isFn(Window._onStopAll) then
+				pcall(Window._onStopAll)
+				Window:Notify({ Title = "Oxiasidian", Description = "All functions stopped" })
+			end
+		end)
 		local m2 = cfgTab:addSection():addMenu("Configuration")
 		local nameBox = m2:addTextbox("Config name", function() end, nil, nil, store.File)
 		local listDD = m2:addDropdown("Saved configs", "", Library.Config.ListConfigs(), function() end)
