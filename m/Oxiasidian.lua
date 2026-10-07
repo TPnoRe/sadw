@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.1.0"
+Library.Version = "3.1.1"
 Library.Name = "QuantumOnyxGUI"
 
 -- ============================ 1. Library Core ================================
@@ -470,7 +470,7 @@ local function ShowNotif(parsed, theme, kind)
 		TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = theme.Text, LayoutOrder = 1 }, card)
 	New("TextLabel", { Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1, Text = parsed.Description, Font = Enum.Font.Gotham, TextSize = 12,
-		TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true, RichText = true, TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = theme.TextMuted, LayoutOrder = 2 }, card)
 	if isTbl(parsed.Buttons) and #parsed.Buttons > 0 then
 		local row = New("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, LayoutOrder = 3 }, card)
@@ -777,7 +777,7 @@ function Library:CreateWindow(...)
 		self._main.Visible = self._open
 		self._float.Visible = not self._open
 		if not self._open then
-			-- ซ่อน UI หลัก -> ปิด modal ลอย (เช่น Accent Preview) ไปด้วย
+			-- ซ่อน UI หลัก -> พับ colorpicker ที่กางอยู่ไปด้วย
 			for _, ch in ipairs(self._children or {}) do
 				pcall(function()
 					if isTbl(ch) and ch.Type == "Colorpicker" and ch._open and isFn(ch.ClosePicker) then
@@ -902,9 +902,16 @@ function Library:CreateWindow(...)
 		local ind = New("Frame", { Size = UDim2.new(0, 3, 1, -12), Position = UDim2.new(0, 0, 0, 6),
 			BackgroundColor3 = th.Accent, BorderSizePixel = 0, Visible = false }, btn)
 		Corner(ind, 1)
-		local ic = New("TextLabel", { Position = UDim2.new(0, 9, 0, 0), Size = UDim2.new(0, 22, 1, 0),
+		-- badge หลัง icon ให้ดูมีมิติ (active = พื้น accent + glyph ขาว)
+		local badge = New("Frame", { Position = UDim2.new(0, 6, 0.5, -12),
+			Size = UDim2.new(0, 24, 0, 24), BackgroundColor3 = th.Surface3,
+			BackgroundTransparency = 0.4, BorderSizePixel = 0 }, btn)
+		Corner(badge, 6)
+		local badgeStroke = Stroke(badge, th.BorderSoft, 1)
+		badgeStroke.Transparency = 0.5
+		local ic = New("TextLabel", { Size = UDim2.new(1, 0, 1, 0),
 			BackgroundTransparency = 1, Text = (isConfig and "◉" or IconText(iconId)), Font = Enum.Font.GothamBlack,
-			TextSize = 12, TextColor3 = th.TextDim }, btn)
+			TextSize = 13, TextColor3 = th.TextDim }, badge)
 		local nm = New("TextLabel", { Position = UDim2.new(0, 33, 0, 0), Size = UDim2.new(1, -37, 1, 0),
 			BackgroundTransparency = 1, Text = name, Font = isConfig and Enum.Font.GothamBlack or Enum.Font.Gotham,
 			TextSize = isConfig and 12 or 11,
@@ -946,13 +953,21 @@ function Library:CreateWindow(...)
 				btn.BackgroundTransparency = 0
 				bs.Transparency = 1
 				ind.Visible = true
-				ic.TextColor3 = th.AccentHover
+				badge.BackgroundColor3 = th.Accent
+				badge.BackgroundTransparency = 0.15
+				badgeStroke.Color = th.AccentHover
+				badgeStroke.Transparency = 0
+				ic.TextColor3 = Color3.fromRGB(255, 255, 255)
 				nm.TextColor3 = th.Text
 				nm.Font = Enum.Font.GothamBold
 			else
 				btn.BackgroundTransparency = 1
 				bs.Transparency = 1
 				ind.Visible = false
+				badge.BackgroundColor3 = th.Surface3
+				badge.BackgroundTransparency = 0.4
+				badgeStroke.Color = th.BorderSoft
+				badgeStroke.Transparency = 0.5
 				ic.TextColor3 = th.TextDim
 				nm.TextColor3 = isConfig and th.Text or th.TextMuted
 				nm.Font = isConfig and Enum.Font.GothamBlack or Enum.Font.Gotham
@@ -964,6 +979,7 @@ function Library:CreateWindow(...)
 			btn.BackgroundColor3 = t.Surface2
 			ind.BackgroundColor3 = t.Accent
 			page.ScrollBarImageColor3 = t.Border
+			badgeStroke.Color = (Tab == Window._activeTab) and t.AccentHover or t.BorderSoft
 			Paint(Tab == Window._activeTab)
 		end)
 		function Tab:Select()
@@ -1449,6 +1465,9 @@ function Library:CreateWindow(...)
 					end
 					local s = toStr(d)
 					for _, o in ipairs(opts) do if string.lower(o) == string.lower(s) then return o end end
+					-- default ไม่ตรง option ใดเลย (เช่น index เกินช่วง) -> ใช้ตัวแรกแทน
+					-- ดีกว่าคืน string ดิบที่ไม่มีในลิสต์ (กัน Settings ได้ค่าผิด type)
+					if #opts > 0 then return opts[1] end
 					return s
 				end
 				local function BuildDropdown(label, default, choices, callback, locked, desc, saveKey, multi)
@@ -1818,7 +1837,7 @@ function Library:CreateWindow(...)
 						TextColor3 = Window._theme.Text }, row)
 					local t2 = New("TextLabel", { Position = UDim2.new(0, 9, 0, 18), Size = UDim2.new(1, -18, 0, 16),
 						BackgroundTransparency = 1, Text = descT, Font = Enum.Font.Gotham, TextSize = 11,
-						TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+						RichText = true, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 						TextColor3 = Window._theme.TextMuted, Visible = (descT ~= "") }, row)
 					OnTheme(function(t)
 						row.BackgroundColor3 = t.Surface
@@ -1960,12 +1979,17 @@ function Library:CreateWindow(...)
 					Stroke(prev, Window._theme.Border, 1)
 				local comp = { _window = Window, _row = row, _value = def, _callback = cb,
 					_locked = locked, _saveKey = saveKey, _conns = {}, _open = false, Type = "Colorpicker" }
-				-- modal กลางจอแบบ Photoshop: จาน SV ลากได้ + แถบ Hue + OK/Cancel
-				local MOD_W, MOD_H = 230, 276
+				-- แผงกางในแถว (ไม่ใช้ popup): จาน SV + Hue + hex + OK
+				local PANEL_H = 164
 				local h, s, v = Color3.toHSV(def)
-				local openColor = def
-				local modal, svBox, svDot, hueBar, hueDot, pv, hex, okBtn
-				local svBase, satLyr, valLyr
+				local panel = New("Frame", { Position = UDim2.new(0, 7, 0, 36),
+					Size = UDim2.new(1, -14, 0, PANEL_H), Visible = false,
+					BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0,
+					ClipsDescendants = true }, row)
+				Corner(panel, 5)
+				local panelStroke = Stroke(panel, Window._theme.Border, 1)
+				Pad(panel, 5, 6, 5, 6)
+				local svBox, svDot, hueBar, hueDot, hex, okBtn
 				local function CurColor() return Color3.fromHSV(h, s, v) end
 				local function commit(fire)
 					local c = CurColor()
@@ -1983,17 +2007,14 @@ function Library:CreateWindow(...)
 				local function render()
 					local c = CurColor()
 					prev.BackgroundColor3 = c
-					if modal then
-						svBase.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-						svDot.Position = UDim2.new(s, 0, 1 - v, 0)
-						hueDot.Position = UDim2.new(h, 0, 0.5, 0)
-						pv.BackgroundColor3 = c
-						if hex and not hex:IsFocused() then
-							local r = math.floor(c.R * 255 + 0.5)
-							local g = math.floor(c.G * 255 + 0.5)
-							local b = math.floor(c.B * 255 + 0.5)
-							hex.Text = string.format("#%02X%02X%02X", r, g, b)
-						end
+					svBox.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+					svDot.Position = UDim2.new(s, 0, 1 - v, 0)
+					hueDot.Position = UDim2.new(h, 0, 0.5, 0)
+					if hex and not hex:IsFocused() then
+						local r = math.floor(c.R * 255 + 0.5)
+						local g = math.floor(c.G * 255 + 0.5)
+						local b = math.floor(c.B * 255 + 0.5)
+						hex.Text = string.format("#%02X%02X%02X", r, g, b)
 					end
 				end
 				local function Apply(c, fire)
@@ -2002,49 +2023,28 @@ function Library:CreateWindow(...)
 					render()
 					commit(fire)
 				end
-				local function Close(confirm)
+				local function Close()
 					if not comp._open then return end
 					comp._open = false
-					if not confirm then Apply(openColor, true) end
-					if modal then modal.Visible = false end
+					panel.Visible = false
+					row.Size = UDim2.new(1, 0, 0, 32)
 				end
-				local function CenterModal()
-					local mp, ms = main.AbsolutePosition, main.AbsoluteSize
-					local vs = Viewport()
-					local cx = clamp(mp.X + ms.X / 2 - MOD_W / 2, 8, math.max(8, vs.X - MOD_W - 8))
-					local cy = clamp(mp.Y + ms.Y / 2 - MOD_H / 2, 8, math.max(8, vs.Y - MOD_H - 8))
-					modal.Position = UDim2.new(0, cx, 0, cy)
-				end
-				local function BuildModal()
-					modal = New("Frame", { Size = UDim2.new(0, MOD_W, 0, MOD_H), Visible = false,
-						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, ZIndex = 200 }, gui)
-					Corner(modal, 7)
-					Stroke(modal, Window._theme.Border, 1)
-					Pad(modal, 8, 10, 8, 10)
-					local titleL = New("TextLabel", { Size = UDim2.new(1, -26, 0, 20),
-						BackgroundTransparency = 1, Text = label, Font = Enum.Font.GothamBold, TextSize = 13,
-						TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
-						TextColor3 = Window._theme.Text }, modal)
-					local xBtn = New("TextButton", { AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 20, 0, 20),
-						BackgroundColor3 = Window._theme.Surface2, Text = "X",
-						Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = Window._theme.TextMuted }, modal)
-					Corner(xBtn, 5)
+				do
 					-- จาน SV: base สี hue + ไล่ขาว(ซ้าย) + ไล่ดำ(ล่าง)
-					svBox = New("Frame", { Position = UDim2.new(0, 0, 0, 26),
-						Size = UDim2.new(1, 0, 0, 128), BackgroundColor3 = Color3.fromHSV(h, 1, 1),
-						BorderSizePixel = 0, ClipsDescendants = true }, modal)
+					svBox = New("Frame", { Size = UDim2.new(1, 0, 0, 106),
+						BackgroundColor3 = Color3.fromHSV(h, 1, 1),
+						BorderSizePixel = 0, ClipsDescendants = true }, panel)
 					Corner(svBox, 5)
 					Stroke(svBox, Window._theme.Border, 1)
 					svBase = svBox
-					satLyr = New("Frame", { Size = UDim2.new(1, 0, 1, 0),
+					local satLyr = New("Frame", { Size = UDim2.new(1, 0, 1, 0),
 						BackgroundColor3 = Color3.fromRGB(255, 255, 255), BorderSizePixel = 0 }, svBox)
 					local satG = New("UIGradient", { Rotation = 90 }, satLyr)
 					satG.Transparency = NumberSequence.new({
 						NumberSequenceKeypoint.new(0, 0),
 						NumberSequenceKeypoint.new(1, 1),
 					})
-					valLyr = New("Frame", { Size = UDim2.new(1, 0, 1, 0),
+					local valLyr = New("Frame", { Size = UDim2.new(1, 0, 1, 0),
 						BackgroundColor3 = Color3.fromRGB(0, 0, 0), BorderSizePixel = 0 }, svBox)
 					local valG = New("UIGradient", { Rotation = 0 }, valLyr)
 					valG.Transparency = NumberSequence.new({
@@ -2057,9 +2057,9 @@ function Library:CreateWindow(...)
 					Corner(svDot, 6)
 					Stroke(svDot, Color3.fromRGB(0, 0, 0), 2)
 					-- แถบ Hue สายรุ้ง
-					hueBar = New("Frame", { Position = UDim2.new(0, 0, 0, 158),
+					hueBar = New("Frame", { Position = UDim2.new(0, 0, 0, 110),
 						Size = UDim2.new(1, 0, 0, 14), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-						BorderSizePixel = 0, ClipsDescendants = true }, modal)
+						BorderSizePixel = 0, ClipsDescendants = true }, panel)
 					Corner(hueBar, 4)
 					Stroke(hueBar, Window._theme.Border, 1)
 					local hueG = New("UIGradient", { Rotation = 90 }, hueBar)
@@ -2077,16 +2077,11 @@ function Library:CreateWindow(...)
 						BorderSizePixel = 0, ZIndex = 3 }, hueBar)
 					Corner(hueDot, 2)
 					Stroke(hueDot, Color3.fromRGB(0, 0, 0), 1)
-					pv = New("Frame", { Position = UDim2.new(0, 0, 0, 176),
-						Size = UDim2.new(1, 0, 0, 22), BackgroundColor3 = comp._value,
-						BorderSizePixel = 0 }, modal)
-					Corner(pv, 5)
-					Stroke(pv, Window._theme.Border, 1)
-					hex = New("TextBox", { Position = UDim2.new(0, 0, 0, 202),
-						Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = Window._theme.Surface2,
+					hex = New("TextBox", { Position = UDim2.new(0, 0, 0, 128),
+						Size = UDim2.new(1, -88, 0, 26), BackgroundColor3 = Window._theme.Surface2,
 						Text = "", PlaceholderText = "#RRGGBB", Font = Enum.Font.Gotham, TextSize = 12,
 						TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Window._theme.Text,
-						PlaceholderColor3 = Window._theme.TextDim, ClearTextOnFocus = false }, modal)
+						PlaceholderColor3 = Window._theme.TextDim, ClearTextOnFocus = false }, panel)
 					Corner(hex, 5)
 					Stroke(hex, Window._theme.BorderSoft, 1)
 					Pad(hex, 0, 8, 0, 8)
@@ -2100,26 +2095,18 @@ function Library:CreateWindow(...)
 							render()
 						end
 					end))
-					okBtn = New("TextButton", { Position = UDim2.new(0, 0, 0, 230),
-						Size = UDim2.new(0.5, -3, 0, 28), BackgroundColor3 = Window._theme.Accent,
+					okBtn = New("TextButton", { AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.new(1, 0, 0, 128), Size = UDim2.new(0, 80, 0, 26),
+						BackgroundColor3 = Window._theme.Accent,
 						Text = "OK", Font = Enum.Font.GothamBold, TextSize = 13,
-						TextColor3 = Color3.fromRGB(255, 255, 255) }, modal)
+						TextColor3 = Color3.fromRGB(255, 255, 255) }, panel)
 					Corner(okBtn, 5)
-					local cancelBtn = New("TextButton", { AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, 0, 0, 230), Size = UDim2.new(0.5, -3, 0, 28),
-						BackgroundColor3 = Window._theme.Surface2, Text = "Cancel",
-						Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = Window._theme.Text }, modal)
-					Corner(cancelBtn, 5)
-					Stroke(cancelBtn, Window._theme.BorderSoft, 1)
 					OnTheme(function(t)
-						modal.BackgroundColor3 = t.Surface
-						titleL.TextColor3 = t.Text
-						xBtn.BackgroundColor3 = t.Surface2
+						panel.BackgroundColor3 = t.Surface
+						panelStroke.Color = t.Border
 						hex.BackgroundColor3 = t.Surface2
 						hex.TextColor3 = t.Text
 						okBtn.BackgroundColor3 = t.Accent
-						cancelBtn.BackgroundColor3 = t.Surface2
-						cancelBtn.TextColor3 = t.Text
 					end)
 					-- ลากบนจาน SV
 					local dragSV = false
@@ -2158,30 +2145,12 @@ function Library:CreateWindow(...)
 							dragSV, dragH = false, false
 						end
 					end))
-					Track(comp, okBtn.MouseButton1Click:Connect(function() Close(true) end))
-					Track(comp, cancelBtn.MouseButton1Click:Connect(function() Close(false) end))
-					Track(comp, xBtn.MouseButton1Click:Connect(function() Close(false) end))
-					Track(comp, UserInputService.InputBegan:Connect(function(input)
-						if not comp._open or not modal.Visible then return end
-						if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-						local mp2, ms2 = modal.AbsolutePosition, modal.AbsoluteSize
-						local rp, rs2 = row.AbsolutePosition, row.AbsoluteSize
-						local x, y = input.Position.X, input.Position.Y
-						local inModal = (x >= mp2.X and x <= mp2.X + ms2.X and y >= mp2.Y and y <= mp2.Y + ms2.Y)
-						local inRow = (x >= rp.X and x <= rp.X + rs2.X and y >= rp.Y and y <= rp.Y + rs2.Y)
-						if not inModal and not inRow then Close(true) end
-					end))
-					-- modal ตามหน้าต่างหลักตอนลาก/ย่อขยาย
-					local function FollowMain()
-						if not comp._open or not modal.Visible then return end
-						CenterModal()
-					end
-					Track(comp, main:GetPropertyChangedSignal("AbsolutePosition"):Connect(FollowMain))
-					Track(comp, main:GetPropertyChangedSignal("AbsoluteSize"):Connect(FollowMain))
+					Track(comp, okBtn.MouseButton1Click:Connect(function() Close() end))
 				end
 				render()
 				comp.GetValue = function() return comp._value end
-				comp.ClosePicker = function() Close(true) end
+				comp.Collapse = function() Close() end
+				comp.ClosePicker = function() Close() end
 				comp.IsOpen = function() return comp._open end
 				comp.SetValue = function(a2, b2)
 					local v = (b2 ~= nil and b2 or a2)
@@ -2198,17 +2167,22 @@ function Library:CreateWindow(...)
 				comp.Destroy = function()
 					DisconnectAll(comp)
 					pcall(function() row:Destroy() end)
-					pcall(function() if modal then modal:Destroy() end end)
 				end
 				Track(comp, prev.MouseButton1Click:Connect(function()
 					if comp._locked then return end
-					if comp._open then Close(true) return end
-					if not modal or not modal.Parent then BuildModal() end
+					if comp._open then Close() return end
+					-- เปิดตัวนี้ พับตัวอื่นก่อน (ไม่มี popup ซ้อนกัน)
+					for _, ch in ipairs(Window._children or {}) do
+						pcall(function()
+							if isTbl(ch) and ch ~= comp and ch.Type == "Colorpicker" and ch._open and isFn(ch.Collapse) then
+								ch.Collapse()
+							end
+						end)
+					end
 					h, s, v = Color3.toHSV(comp._value)
-					openColor = comp._value
 					render()
-					CenterModal()
-					modal.Visible = true
+					panel.Visible = true
+					row.Size = UDim2.new(1, 0, 0, 32 + 4 + PANEL_H)
 					comp._open = true
 				end))
 					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
