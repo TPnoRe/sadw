@@ -293,9 +293,8 @@ end
 
 local function SafeMakeFolder(folder)
 	pcall(function()
-		if makefolder and isfolder and not isfolder(folder) then
-			makefolder(folder)
-		end
+		if isfolder and isfolder(folder) then return end
+		if makefolder then makefolder(folder) end
 	end)
 end
 
@@ -306,9 +305,23 @@ local function SerializeConfigValue(v)
 	elseif typeof(v) == "EnumItem" then
 		return { __type = "EnumItem", Name = v.Name }
 	elseif isTbl(v) then
-		local copy = {}
-		for k, val in pairs(v) do copy[toStr(k)] = SerializeConfigValue(val) end
-		return copy
+		local isArray = true
+		local n = #v
+		for k, _ in pairs(v) do
+			if type(k) ~= "number" or k < 1 or k > n or math.floor(k) ~= k then
+				isArray = false
+				break
+			end
+		end
+		if isArray then
+			local arr = {}
+			for i = 1, n do arr[i] = SerializeConfigValue(v[i]) end
+			return arr
+		else
+			local copy = {}
+			for k, val in pairs(v) do copy[toStr(k)] = SerializeConfigValue(val) end
+			return copy
+		end
 	else
 		return v
 	end
@@ -337,124 +350,27 @@ local function DeserializeConfigValue(v, compType)
 	return v
 end
 
-local ConfigSystem = {
-	File = "OxiasidianConfig",
-	Data = {},              -- [key] = serializedValue
-	Registry = {},          -- [key] = component
-	_saveThread = nil,
-	_isSaving = false,
-}
-
-function ConfigSystem:Path()
-	return "OxiasidianUI/Config/" .. self.File .. ".json"
-end
-
-function ConfigSystem:Init(fileName)
-	fileName = toStr(fileName or "OxiasidianConfig")
-	if fileName == "" then fileName = "OxiasidianConfig" end
-	self.File = fileName:gsub("[^%w%-%_]", "_")
-	self.Data = {}
-	self:AutoLoad()
-end
-
-function ConfigSystem:AutoLoad()
-	local path = self:Path()
-	if not SafeIsFile(path) then
-		local legacyPath = "OxiasidianUI/" .. self.File .. ".json"
-		if SafeIsFile(legacyPath) then path = legacyPath end
-	end
-	if SafeIsFile(path) then
-		local content = SafeReadFile(path)
-		if isStr(content) and #content > 1 then
-			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
-			if ok and isTbl(dec) then
-				self.Data = dec
-				return true
-			end
-		end
-	end
-	self.Data = {}
-	return false
-end
-
-function ConfigSystem:Get(key, defaultVal, compType)
-	if not key then return defaultVal end
-	key = toStr(key)
-	if PlayerConfig and PlayerConfig:Has(key) then
-		return PlayerConfig:Get(key, defaultVal, compType)
-	end
-	local v = self.Data[key]
-	if v ~= nil then
-		return DeserializeConfigValue(v, compType)
-	end
-	return defaultVal
-end
-
-function ConfigSystem:Set(key, val)
-	if not key then return end
-	key = toStr(key)
-	if PlayerConfig and PlayerConfig:Has(key) then
-		PlayerConfig:Set(key, val)
-		return
-	end
-	self.Data[key] = SerializeConfigValue(val)
-	self:QueueSave()
-end
-
--- Debounced disk write: บันทึกข้อมูลแบบ Debounce 0.35s ป้องกันแล็กตอนลาก Slider
-function ConfigSystem:QueueSave()
-	if self._saveThread then
-		pcall(function() task.cancel(self._saveThread) end)
-		self._saveThread = nil
-	end
-	self._saveThread = task.delay(0.35, function()
-		self._saveThread = nil
-		self:Save()
-	end)
-end
-
-function ConfigSystem:Save()
-	if self._isSaving then return end
-	self._isSaving = true
+local function GetPlayerName()
+	local pName = nil
 	pcall(function()
-		SafeMakeFolder("OxiasidianUI")
-		SafeMakeFolder("OxiasidianUI/Config")
-		local enc = HttpService:JSONEncode(self.Data)
-		SafeWriteFile(self:Path(), enc)
+		if Players and Players.LocalPlayer and Players.LocalPlayer.Name then
+			pName = Players.LocalPlayer.Name
+		end
 	end)
-	self._isSaving = false
-end
-
-function ConfigSystem:Flush()
-	if self._saveThread then
-		pcall(function() task.cancel(self._saveThread) end)
-		self._saveThread = nil
+	if not pName or pName == "" then
+		pcall(function()
+			pName = game:GetService("Players").LocalPlayer.Name
+		end)
 	end
-	self:Save()
+	return (pName and pName ~= "") and pName or "playername"
 end
 
-function ConfigSystem:Register(key, comp)
-	if not key or not comp then return end
-	self.Registry[toStr(key)] = comp
-end
-
-function ConfigSystem:Reset()
-	self.Data = {}
-	self:Flush()
-end
-
-function ConfigSystem:Load()
-	return self:AutoLoad()
-end
-
-Library.Config = ConfigSystem
-Library.ConfigSystem = ConfigSystem
-Library.UIConfig = ConfigSystem
-
--- ================== 10.2 Player & Function Config System ==================
-local function DetectGameName(override)
+local function DetectGameName(override, fallbackSaveFile)
 	if override and isStr(override) and override ~= "" then
-		return override:gsub("[^%w%-%_]", "_")
+		return override:gsub("[^%w%-%_]", "")
+	end
+	if fallbackSaveFile and isStr(fallbackSaveFile) and fallbackSaveFile ~= "" and fallbackSaveFile ~= "OxiasidianConfig" then
+		return fallbackSaveFile:gsub("[^%w%-%_]", "")
 	end
 	local name = nil
 	pcall(function()
@@ -470,14 +386,96 @@ local function DetectGameName(override)
 		end)
 	end
 	if not name or name == "" or name == "Game" then
-		name = tostring(game.GameId or game.PlaceId or "Game")
+		name = tostring(game.GameId or game.PlaceId or "BloxFruits")
 	end
 	name = toStr(name):gsub("%s+", "_"):gsub("[^%w%-%_]", ""):gsub("_+", "_")
-	return (name ~= "" and name) or "UnknownGame"
+	return (name ~= "" and name) or "BloxFruits"
 end
 
+-- ================== 10.1 Known Settings Keys (14 Categories) ==================
+local KnownSettingsKeys = {
+	AcceptQuests = true, AutoCollectBones = true, AutoFarm = true, AutoFarmBones = true,
+	AutoFarmMagnetTokens = true, AutoFarmWeapon = true, AutoMasterySwords = true, AutoRollMagnetGacha = true,
+	AutoSetSpawnPoint = true, AutoSlap = true, AutoTryLuck = true, Auto_Random_Surprise = true,
+	BypassGetQuest = true, DoubleAttack = true, DummyTraining = true, FarmMode = true,
+	HealthMob = true, MasteryFarm = true, PosMethod = true, PosY = true,
+	QuestDebounce = true, QuestFarmMode = true, ScrollCraftAmount = true, SelectSwordMastery = true,
+	SelectWeapon = true, SendWebhookDataLog = true, SendWebhookFarmsAll = true, SendWebhookInventory = true,
+	SendWebhookKitsune = true, SendWebhookLevelUp = true, SendWebhookMirage = true, SendWebhookPrehistoric = true,
+	SendWebhookRolledFruit = true, SendWebhookStoreFruit = true, SetAzureEmber = true, ShootAmount = true,
+	ShootGunBlaze = true, ShootGunTyrant = true, ShootGunVolcano = true, SpeedBoat = true,
+	StartObsHop = true, StopChest = true, StopHopChestIfChalice = true, TradeAzureEmber = true,
+	TrainMethod = true, Tweenfruit = true, UseDragonSforSeabeasts = true, WalkSpeed = true,
+	Water = true, WebhookPingOnEvents = true, WebhookPingOnMythical = true, White_Screen = true,
+	XrayVision = true, attackplayers = true, checknearestdist = true,
+	Aimbot = true, AutoActivateObservationHaki = true, AutoAttack = true, AutoBuyEnchancementColor = true,
+	AutoFarmObservation = true, AutoKenV2 = true, AutoOpenColorsTask = true, BringAttackMaxFrom = true,
+	BringMonster = true, BringMonsterRadius = true, BringSmoothSpeed = true, BringCircleRadius = true,
+	BringFlySpeed = true, CamLock = true, CircleRadius = true, EnableAimbot = true,
+	GetRainbowHaki = true, oxiasidianAttack = true, RemoveAnimationFast = true, RemoveObservationEffect = true,
+	attackmobs = true,
+	AutoAttackGun = true, AutoSkills = true, BloxFruitDelay = true, BloxFruitKeys = true,
+	DragonstormMode = true, GunDelay = true, GunKeys = true, HoldTime_C = true,
+	HoldTime_F = true, HoldTime_V = true, HoldTime_X = true, HoldTime_Z = true,
+	MeleeDelay = true, MeleeKeys = true, SelectSkills = true, SwordDelay = true,
+	SwordKeys = true,
+	AutoCursedCaptain = true, AutoDarkbeard = true, AutoDoughKing = true, AutoFarmBoss = true,
+	AutoFarmPrince = true, AutoGreybeard = true, AutoKillAllBosses = true, AutoRipIndra = true,
+	AutoSoulReaper = true, AutoTaskEliteHunter = true, AutoTyrantOfTheSkies = true, GetBossQuest = true,
+	IgnoreCakePrince = true, IgnoreDoughChaliceFarm = true, SelectBoss = true, SelectBosstoHop = true,
+	SelectGunTyrant = true, StopHopEliteIfChalice = true,
+	AutoBlueMoonFarm = true, AutoBuyNewBoatWhendies = true, AutoFarmSeaEvents = true, AutoFindKitsuneIsland = true,
+	AutoFindLeviatan = true, AutoFindMirageIsland = true, AutoFindPrehistoricIsland = true, AutoIgnoreSeaEventsLeviathan = true,
+	AutoKillLeviathan = true, AutoLookMoon = true, AutoPray = true, AutoSail = true,
+	AutoSailbacktoTiki = true, AutoTeleportKitsune = true, AutoTeleportMirage = true, AutoTeleportPrehistoric = true,
+	BoatPosY = true, BoatSelected = true, CollectAzure = true, DodgeTerror = true,
+	DodgefSeabeast = true, ManualBoatSpeed = true, ManualIncreaseBoatSpeed = true, ProtectBoat = true,
+	ResetPlayerdestroyboat = true, SailTargetBoat = true, SeaEventTargets = true, SeaLevelSelected = true,
+	BypassTP = true, ForceAnchoredY = true, JumpPower = true, NpcTween = true,
+	SelectPlayer = true, SpectatePlayer = true, TPtoNPC = true, TeleportIslandSelect = true,
+	TeleportToIsland = true, TeleporttoPlayer = true, TweenSpeed = true,
+	AntiAFK = true, AutoAfkJoinBossRaid = true, AutoAfkJoinCastleRaid = true, AutoAfkJoinEliteHunter = true,
+	AutoAfkJoinFactoryRaid = true, AutoAfkJoinFruit = true, AutoHopChest = true, AutoHopwhen30mins = true,
+	ChestHopCount = true, HopDelay = true, HopIfNoBerries = true, HopIfNoChest = true,
+	HopIfNoFruit = true, HopWhenAdmin = true,
+	AutoBartiloQuest = true, AutoCDKQuest = true, AutoCompleteSecretQuests = true, AutoCraftScrolls = true,
+	AutoGetCDK = true, AutoGetDBV2 = true, AutoGetSkullGuitar = true, AutoMaterial = true,
+	AutoRengoku = true, AutoSecondSea = true, AutoSharkAnchor = true, AutoTTK = true,
+	AutoThirdSea = true, AutoTushita = true, AutoUnlockSaber = true, AutoYama = true,
+	BuyLegendSword = true, BuyTTK = true, FinishedSecretQuestsTracker = true, IgnoreMaterialFarmGuitar = true,
+	SelectLegendarySword = true, SelectMaterial = true, SelectScrollType = true,
+	AutoActiveRaceV4 = true, AutoActiveRacenear = true, AutoAgility = true, AutoChooseGear = true,
+	AutoCompleteDracoTrial = true, AutoFinishTrial = true, AutoFullyPullLever = true, AutoGetCyborgRace = true,
+	AutoGetGhoulRace = true, AutoKillPlayerinTrial = true, AutoStartRaceV2 = true, AutoStartRaceV3 = true,
+	AutoTrainGear = true, AutoTrialDracoTP = true, BuyGear = true, TweenMGear = true,
+	AutoAwaken = true, AutoBuyChip = true, AutoCardsDungeon = true, AutoDungeonFull = true,
+	AutoDungeonShrine = true, AutoFactoryRaid = true, AutoFarmPirateRaid = true, AutoLawRaid = true,
+	AutoRaidFull = true, AutoUnlockDifficulties = true, Autostopraid = true, CardsSelection = true,
+	FragsCap = true, InstantKillLateIslands = true, SelectRaid = true,
+	AutoBuyMelee = true, AutoDeathStep = true, AutoDragonTalon = true, AutoElectricClaw = true,
+	AutoSharkmanKarate = true, AutoUpgradeDragonTalon = true, SelectMelee = true,
+	AutoBerrySafe = true, AutoBuyFruitDealer = true, AutoBuyMirageFruitDealer = true, AutoBuyTrinkets = true,
+	AutoChest = true, AutoCollectEgg = true, AutoCollectFireFlowers = true, AutoCraftBait = true,
+	AutoFuseTrinkets = true, AutoGetAnglerQuest = true, AutoGetChest = true, AutoPurpleBelt = true,
+	AutoQuestBlaze = true, AutoRefineTrinkets = true, AutoScrapTrinkets = true, AutoSellFish = true,
+	AutoStoreFruit = true, AutoUnstoreBelowFruit = true, AutoUseRodSkill = true, AutoVolcanicEvent = true,
+	AutoWhiteBelt = true, Auto_Fishing = true, BuyAbility = true, BuyAccessories = true,
+	ChestFilterType = true, CompleteCitizenQuest = true, FruitCheck = true, GunSelect = true,
+	LastCastLocation = true, Random_Auto = true, SelectFruitDealerFruit = true, SelectGunBlaze = true,
+	SelectGunVolcano = true, SelectMirageDealerFruit = true, SelectedBait = true, SelectedRod = true,
+	DevilFruitESP = true, ESPChest = true, ESPIsland = true, ESPMyBoat = true,
+	ESPPlayer = true, ESP_Berries = true, ESP_RealFruits = true,
+	AutoAggressiveGC = true, AutoCleanMemory = true, AutoClearDebris = true, AutoFastMode = true,
+	AutoLoadScriptonLoad = true, AutoStats = true, AutoWebhook = true, BlackScreen = true,
+	DataLogInterval = true, DataLogWebhookUrl = true, Defense = true, DemonFruit = true,
+	DisableDamageCounter = true, DisableNotifications = true, Gun = true, InfiniteZoom = true,
+	Melee = true, NoFog = true, PointsSlider = true, Sword = true,
+	TeamSelectLoad = true, Webhook = true, WebhookPingId = true,
+}
+
+-- ================== 10.2 Player & Function Config (playername_BloxFruits.json) ==================
 local PlayerConfig = {
-	GameName = "UnknownGame",
+	FileName = "playername_BloxFruits",
 	Data = {},
 	BoundSettings = nil,
 	_saveThread = nil,
@@ -485,17 +483,27 @@ local PlayerConfig = {
 }
 
 function PlayerConfig:Path()
-	return "OxiasidianUI/Player_" .. self.GameName .. ".json"
+	return "OxiasidianUI/" .. self.FileName .. ".json"
 end
 
-function PlayerConfig:Init(gameName)
-	self.GameName = DetectGameName(gameName)
+function PlayerConfig:Init(gameName, saveFile)
+	local pName = GetPlayerName()
+	local gName = DetectGameName(gameName, saveFile)
+	self.FileName = pName .. "_" .. gName
 	self.Data = {}
 	self:AutoLoad()
 end
 
 function PlayerConfig:AutoLoad()
 	local path = self:Path()
+	if not SafeIsFile(path) then
+		-- Fallback aliases: playername_<game>.json or Player_<game>.json
+		local pName = GetPlayerName()
+		local cand1 = "OxiasidianUI/playername_" .. self.FileName:match("_(.+)$") .. ".json"
+		local cand2 = "OxiasidianUI/Player_" .. self.FileName:match("_(.+)$") .. ".json"
+		if SafeIsFile(cand1) then path = cand1
+		elseif SafeIsFile(cand2) then path = cand2 end
+	end
 	if SafeIsFile(path) then
 		local content = SafeReadFile(path)
 		if isStr(content) and #content > 1 then
@@ -518,18 +526,11 @@ end
 function PlayerConfig:Has(key)
 	if not key then return false end
 	key = toStr(key)
-	if isTbl(self.BoundSettings) and self.BoundSettings[key] ~= nil then
-		return true
-	end
-	if self.Data and self.Data[key] ~= nil then
-		return true
-	end
-	if getgenv and isTbl(getgenv().Settings) and getgenv().Settings[key] ~= nil then
-		return true
-	end
-	if _G and isTbl(_G.Settings) and _G.Settings[key] ~= nil then
-		return true
-	end
+	if KnownSettingsKeys[key] == true then return true end
+	if isTbl(self.BoundSettings) and self.BoundSettings[key] ~= nil then return true end
+	if self.Data and self.Data[key] ~= nil then return true end
+	if getgenv and isTbl(getgenv().Settings) and getgenv().Settings[key] ~= nil then return true end
+	if _G and isTbl(_G.Settings) and _G.Settings[key] ~= nil then return true end
 	return false
 end
 
@@ -625,6 +626,119 @@ PlayerConfig.SetFunction = PlayerConfig.Set
 PlayerConfig.GetState = PlayerConfig.Get
 PlayerConfig.SetState = PlayerConfig.Set
 
+-- ================== 10.3 UI Config System (OxiasidianUI/Config/<SaveFile>.json) ==================
+local ConfigSystem = {
+	File = "OxiasidianConfig",
+	Data = {},              -- [key] = serializedValue (UI controls ONLY)
+	Registry = {},          -- [key] = component
+	_saveThread = nil,
+	_isSaving = false,
+}
+
+function ConfigSystem:Path()
+	return "OxiasidianUI/Config/" .. self.File .. ".json"
+end
+
+function ConfigSystem:Init(fileName)
+	fileName = toStr(fileName or "OxiasidianConfig")
+	if fileName == "" then fileName = "OxiasidianConfig" end
+	self.File = fileName:gsub("[^%w%-%_]", "_")
+	self.Data = {}
+	self:AutoLoad()
+end
+
+function ConfigSystem:AutoLoad()
+	local path = self:Path()
+	if not SafeIsFile(path) then
+		local legacyPath = "OxiasidianUI/" .. self.File .. ".json"
+		if SafeIsFile(legacyPath) then path = legacyPath end
+	end
+	if SafeIsFile(path) then
+		local content = SafeReadFile(path)
+		if isStr(content) and #content > 1 then
+			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
+			if ok and isTbl(dec) then
+				self.Data = dec
+				return true
+			end
+		end
+	end
+	self.Data = {}
+	return false
+end
+
+function ConfigSystem:Get(key, defaultVal, compType)
+	if not key then return defaultVal end
+	key = toStr(key)
+	if PlayerConfig:Has(key) then
+		return PlayerConfig:Get(key, defaultVal, compType)
+	end
+	local v = self.Data[key]
+	if v ~= nil then
+		return DeserializeConfigValue(v, compType)
+	end
+	return defaultVal
+end
+
+function ConfigSystem:Set(key, val)
+	if not key then return end
+	key = toStr(key)
+	if PlayerConfig:Has(key) then
+		PlayerConfig:Set(key, val)
+		return
+	end
+	self.Data[key] = SerializeConfigValue(val)
+	self:QueueSave()
+end
+
+function ConfigSystem:QueueSave()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self._saveThread = task.delay(0.35, function()
+		self._saveThread = nil
+		self:Save()
+	end)
+end
+
+function ConfigSystem:Save()
+	if self._isSaving then return end
+	self._isSaving = true
+	pcall(function()
+		SafeMakeFolder("OxiasidianUI")
+		SafeMakeFolder("OxiasidianUI/Config")
+		local enc = HttpService:JSONEncode(self.Data)
+		SafeWriteFile(self:Path(), enc)
+	end)
+	self._isSaving = false
+end
+
+function ConfigSystem:Flush()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self:Save()
+end
+
+function ConfigSystem:Register(key, comp)
+	if not key or not comp then return end
+	self.Registry[toStr(key)] = comp
+end
+
+function ConfigSystem:Reset()
+	self.Data = {}
+	self:Flush()
+end
+
+function ConfigSystem:Load()
+	return self:AutoLoad()
+end
+
+Library.Config = ConfigSystem
+Library.ConfigSystem = ConfigSystem
+Library.UIConfig = ConfigSystem
 Library.PlayerConfig = PlayerConfig
 Library.FunctionConfig = PlayerConfig
 
@@ -782,7 +896,7 @@ function Library:CreateWindow(...)
 	ConfigSystem:Init(saveFile)
 	-- ---- Init PlayerConfig (Function Config: Settings) ----
 	local gameName = cfg.GameName or cfg.gameName or cfg.Game or cfg.game
-	PlayerConfig:Init(gameName)
+	PlayerConfig:Init(gameName, saveFile)
 	local boundSettings = cfg.Settings or cfg.settings
 	if not boundSettings then
 		if getgenv and isTbl(getgenv().Settings) then boundSettings = getgenv().Settings
@@ -2487,20 +2601,21 @@ function Library:CreateWindow(...)
 		thDD.Type = "ThemePicker"
 
 		local cfgMenu = cfgTab:addSection():addMenu("Config Manager")
-		cfgMenu:addLabel("UI Config", ConfigSystem:Path())
-		cfgMenu:addLabel("Function Config", PlayerConfig:Path())
-		cfgMenu:addButton("Save All Configs Now", function()
+		cfgMenu:addLabel("UI Config (Theme/Hotkey)", ConfigSystem:Path())
+		cfgMenu:addLabel("Settings Config", PlayerConfig:Path())
+		cfgMenu:addLabel("Auto-Save Status", "Active (Instant Auto-Save)")
+		cfgMenu:addButton("Save Now (Manual Backup)", function()
 			ConfigSystem:Flush()
 			PlayerConfig:Flush()
-			Window:Notify({ Title = "Config", Description = "Saved all configs successfully" })
+			Window:Notify({ Title = "Config", Description = "Configs flushed to disk" })
 		end)
 		cfgMenu:addButton("Reset UI Config", function()
 			ConfigSystem:Reset()
 			Window:Notify({ Title = "Config", Description = "UI Config has been reset" })
 		end)
-		cfgMenu:addButton("Reset Function Config", function()
+		cfgMenu:addButton("Reset Settings Config", function()
 			PlayerConfig:Reset()
-			Window:Notify({ Title = "Config", Description = "Function Config has been reset" })
+			Window:Notify({ Title = "Config", Description = "Settings Config has been reset" })
 		end)
 
 		local hk = cfgTab:addSection():addMenu("Hotkey")
