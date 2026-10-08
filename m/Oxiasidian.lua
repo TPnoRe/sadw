@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.6"
+Library.Version = "3.2.7"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -1277,14 +1277,62 @@ function Library:CreateWindow(...)
 		if self._open then self:Close() else self:Open() end
 	end
 	function Window:Minimize(...) self:_ApplyVisible(false) end
-	-- ระบบ Re-open Window: เปิดใหม่ทั้งจากตัว window และจาก Library
-	function Window:Reopen(...) self:Open() end
+	-- โหลดและอัปเดต Config ใหม่ทั้งหมดจากดิสก์ พร้อมซิงค์ UI Components ทุกตัว
+	function Window:ReloadConfig()
+		local pOk = false
+		pcall(function() pOk = PlayerConfig:AutoLoad() end)
+		local cOk = false
+		pcall(function() cOk = ConfigSystem:AutoLoad() end)
+
+		-- อัปเดตธีมใหม่จาก Config
+		pcall(function()
+			local th = ConfigSystem:Get("UITheme", Window._themeName)
+			if th and ThemeSystem.Resolve(th) then
+				Window:SetTheme(th)
+			end
+		end)
+
+		-- วนลูปอัปเดตค่าไปยัง UI Components ทั้งหมดในหน้าต่างให้ตรงกับ Config ล่าสุด
+		local updatedCount = 0
+		if Window._children then
+			for _, comp in ipairs(Window._children) do
+				if comp and comp._saveKey then
+					local key = comp._saveKey
+					local val = ConfigSystem:Get(key, nil)
+					if val == nil then
+						val = PlayerConfig:Get(key, nil)
+					end
+					if val == nil and isTbl(PlayerConfig.BoundSettings) and PlayerConfig.BoundSettings[key] ~= nil then
+						val = PlayerConfig.BoundSettings[key]
+					end
+
+					if val ~= nil and isFn(comp.SetValue) then
+						pcall(function()
+							comp:SetValue(val)
+							updatedCount = updatedCount + 1
+						end)
+					end
+				end
+			end
+		end
+
+		return true, updatedCount
+	end
+
+	-- ระบบ Re-open Window: โหลด config ใหม่ทั้งหมด แล้วเปิดหน้าต่าง
+	function Window:Reopen(...)
+		self:ReloadConfig()
+		self:Open()
+	end
 	Window.Show = Window.Open
 	Window.Hide = Window.Minimize
 	Library._lastWindow = Window
 	Library.Reopen = function(...)
 		local w = Library._lastWindow
-		if w then pcall(function() w:Open() end) return true end
+		if w then
+			pcall(function() w:Reopen() end)
+			return true
+		end
 		return false
 	end
 	Library.ToggleUI = function(...)
@@ -2831,18 +2879,13 @@ function Library:CreateWindow(...)
 			end
 		end)
 		hk:addButton("Re-open window", function()
-			Window:Notify({ Title = "Reload", Description = "กำลังโหลด UI ใหม่ทั้งหมด..." })
-			local ok, err = Library.HardReload()
-			if ok then return end
-			pcall(function()
-				Window:SetTheme(Window._themeName)
-			end)
-			Window:Notify({ Title = "Oxiasidian",
-				Description = "Refreshed (v" .. tostring(Library.Version) .. ", " .. tostring(err or "no bootstrap") .. ")" })
-			Window:Minimize()
-			task.delay(0.25, function()
-				pcall(function() Window:Open() end)
-			end)
+			Window:Notify({ Title = "Config", Description = "กำลังโหลดและอัปเดต Config ใหม่ทั้งหมด..." })
+			local ok, count = Window:ReloadConfig()
+			Window:Notify({
+				Title = "Config Updated",
+				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ)",
+			})
+			pcall(function() Window:Open() end)
 		end)
 		return cfgTab
 	end
