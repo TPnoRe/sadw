@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.8"
+Library.Version = "3.2.9"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -813,17 +813,25 @@ local function EnsureNotif()
 	return NotifGui
 end
 local function ParseNotify(args)
-	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 8 } end
+	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 3 } end
 	if isTbl(args[1]) and (args[1].Title ~= nil or args[1].Description ~= nil or args[1].description ~= nil) then
 		local d, o = args[1], (isTbl(args[2]) and args[2] or {})
-		local t = tonumber(o.Time or o.time or o.Duration or 8) or 8
-		if isNum(args[2]) then t = args[2] end
+		local btns = d.Buttons or d.buttons
+		local t = 3
+		if btns and (isTbl(btns) and #btns > 0) then
+			t = tonumber(d.Time or d.time or d.Duration or o.Time or o.time or o.Duration or 3) or 3
+		end
 		return { Title = toStr(d.Title or d.title or "Oxiasidian"),
 			Description = toStr(d.Description or d.description or d.Desc or ""),
-			Buttons = d.Buttons or d.buttons, Id = d.Id or d.id, Time = clamp(t, 1, 30) }
+			Buttons = btns, Id = d.Id or d.id, Time = clamp(t, 1, 30) }
+	end
+	local btns = (isTbl(args[4]) and args[4] or nil)
+	local t = 3
+	if btns and (isTbl(btns) and #btns > 0) then
+		t = tonumber(args[3]) or 3
 	end
 	return { Title = toStr(args[1]), Description = toStr(args[2] or ""),
-		Time = clamp(tonumber(args[3]) or 8, 1, 30), Buttons = (isTbl(args[4]) and args[4] or nil),
+		Time = clamp(t, 1, 30), Buttons = btns,
 		Id = (args[5] ~= nil and toStr(args[5]) or nil) }
 end
 local function ShowNotif(parsed, theme, kind)
@@ -2879,7 +2887,7 @@ function Library:CreateWindow(...)
 			end
 		end)
 		hk:addButton("Re-open window", function()
-			local guiVer = tostring(Library.Version or "3.2.8")
+			local guiVer = tostring(Library.Version or "3.2.9")
 			Window:Notify({ Title = "Config", Description = "กำลังโหลดและอัปเดต Config ใหม่ทั้งหมด..." })
 			local ok, count = Window:ReloadConfig()
 			Window:Notify({
