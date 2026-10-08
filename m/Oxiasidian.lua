@@ -1658,33 +1658,34 @@ function Library:CreateWindow(...)
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
 					Stroke(row, Window._theme.BorderSoft, 1).Transparency = 0.4
-					local tl = New("TextLabel", { Position = UDim2.new(0, 9, 0, 3), Size = UDim2.new(1, -60, 0, 15),
+					local tl = New("TextLabel", { Position = UDim2.new(0, 9, 0, 3), Size = UDim2.new(1, -75, 0, 15),
 						BackgroundTransparency = 1, Text = label, Font = Enum.Font.GothamBold, TextSize = 12,
 						TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 						TextColor3 = Window._theme.Text }, row)
-					local val = New("TextLabel", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 3),
-						Size = UDim2.new(0, 48, 0, 15), BackgroundTransparency = 1, Text = toStr(def),
+					local val = New("TextBox", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 3),
+						Size = UDim2.new(0, 65, 0, 16), BackgroundTransparency = 1, Text = toStr(def),
 						Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right,
-						TextColor3 = Window._theme.AccentHover }, row)
-					local bar = New("TextButton", { Position = UDim2.new(0, 9, 0, 22), Size = UDim2.new(1, -18, 0, 16),
+						TextColor3 = Window._theme.AccentHover, ClearTextOnFocus = false,
+						TextEditable = not locked }, row)
+					local bar = New("TextButton", { Position = UDim2.new(0, 9, 0, 20), Size = UDim2.new(1, -18, 0, 20),
 						BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, row)
 					local track = New("Frame", { Position = UDim2.new(0, 0, 0.5, -2), Size = UDim2.new(1, 0, 0, 4),
-						BackgroundColor3 = Window._theme.Surface3, BorderSizePixel = 0 }, bar)
+						BackgroundColor3 = Window._theme.Surface3, BorderSizePixel = 0, Active = false }, bar)
 					Corner(track, 2)
 					local fill = New("Frame", { Size = UDim2.new(0, 0, 1, 0),
-						BackgroundColor3 = Window._theme.Accent, BorderSizePixel = 0 }, track)
+						BackgroundColor3 = Window._theme.Accent, BorderSizePixel = 0, Active = false }, track)
 					Corner(fill, 2)
 					local dot = New("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0.5, 0),
 						Size = UDim2.new(0, 12, 0, 12), BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-						BorderSizePixel = 0 }, track)
+						BorderSizePixel = 0, Active = false }, track)
 					Corner(dot, 6)
-					local comp = { _window = Window, _row = row, _value = def, _callback = cb,
+					local comp = { _window = Window, _row = row, _box = val, _value = def, _callback = cb,
 						_locked = locked, _saveKey = saveKey, _conns = {}, Type = "Slider",
 						Min = min, Max = max, Step = step }
 					OnTheme(function(t)
 						row.BackgroundColor3 = t.Surface
-						tl.TextColor3 = t.Text
-						val.TextColor3 = t.AccentHover
+						tl.TextColor3 = comp._locked and t.TextDim or t.Text
+						val.TextColor3 = comp._locked and t.TextDim or t.AccentHover
 						track.BackgroundColor3 = t.Surface3
 						fill.BackgroundColor3 = t.Accent
 					end)
@@ -1692,8 +1693,10 @@ function Library:CreateWindow(...)
 						local r = (max - min) <= 0 and 0 or (comp._value - min) / (max - min)
 						fill.Size = UDim2.new(r, 0, 1, 0)
 						dot.Position = UDim2.new(r, 0, 0.5, 0)
-						local fmt = (step < 1) and ("%.1f") or ("%d")
-						val.Text = string.format(fmt, comp._value)
+						if not val:IsFocused() then
+							local fmt = (step < 1) and ("%.1f") or ("%d")
+							val.Text = string.format(fmt, comp._value)
+						end
 					end
 					Render()
 					local function Apply(v, fire)
@@ -1712,7 +1715,32 @@ function Library:CreateWindow(...)
 					comp.Get = comp.GetValue
 					comp.SetValue = function(a2, b2) Apply((b2 ~= nil and b2 or a2), true) end
 					comp.Update = comp.SetValue
+					comp.Set = comp.SetValue
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) end
+
+					-- รองรับการพิมพ์ตัวเลขลงในช่องโดยตรง
+					Track(comp, val.Focused:Connect(function()
+						val.TextColor3 = Color3.fromRGB(255, 255, 255)
+					end))
+					Track(comp, val:GetPropertyChangedSignal("Text"):Connect(function()
+						if val:IsFocused() then
+							local cleaned = val.Text:gsub("[^%d%.%-]", "")
+							if cleaned ~= val.Text then
+								val.Text = cleaned
+							end
+						end
+					end))
+					Track(comp, val.FocusLost:Connect(function(enter)
+						val.TextColor3 = Window._theme.AccentHover
+						local num = tonumber(val.Text)
+						if num ~= nil then
+							Apply(num, true)
+						else
+							Render()
+						end
+					end))
+
+					-- รองรับการคลิกลาก Slider ตามปกติ
 					local dragging = false
 					local function ToVal(x)
 						local ax = track.AbsolutePosition.X
@@ -1737,6 +1765,7 @@ function Library:CreateWindow(...)
 							dragging = false
 						end
 					end))
+					ConfigSystem:Register(comp._saveKey, comp)
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
