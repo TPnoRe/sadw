@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.7"
+Library.Version = "3.2.8"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -2879,11 +2879,12 @@ function Library:CreateWindow(...)
 			end
 		end)
 		hk:addButton("Re-open window", function()
+			local guiVer = tostring(Library.Version or "3.2.8")
 			Window:Notify({ Title = "Config", Description = "กำลังโหลดและอัปเดต Config ใหม่ทั้งหมด..." })
 			local ok, count = Window:ReloadConfig()
 			Window:Notify({
-				Title = "Config Updated",
-				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ)",
+				Title = "Config Updated (v" .. guiVer .. ")",
+				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ) | GUI Version: " .. guiVer,
 			})
 			pcall(function() Window:Open() end)
 		end)
