@@ -22,7 +22,7 @@
 --  11. Cleanup          (Destroy / Disconnect)
 --
 -- วิธีใช้ executor:
---   local Library = loadstring(game:HttpGet(".../QuantumOnyxGUI.lua"))()
+--   local Library = loadstring(game:HttpGet(".../oxiasidianGUI.lua"))()
 --   local win = Library:CreateWindow({Title="Oxiasidian",Subtitle="Blox Fruit",
 --     Version="v.Premium",Theme="Purple",SaveFile="BloxFruits",OnStopAll=function() end})
 --   local tab = win:AddTab("Home","home-oxiasidian")
@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.3.1"
+Library.Version = "3.3.2"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -1080,10 +1080,10 @@ function Library:CreateWindow(...)
 	local parent = GetUIParent()
 	pcall(function()
 		for _, ch in ipairs(parent:GetChildren()) do
-			if ch.Name == "QuantumOnyx" and ch:IsA("ScreenGui") then ch:Destroy() end
+			if (ch.Name == "Oxiasidian" or ch.Name == "QuantumOnyx") and ch:IsA("ScreenGui") then ch:Destroy() end
 		end
 	end)
-	local gui = New("ScreenGui", { Name = "QuantumOnyx", ResetOnSpawn = false,
+	local gui = New("ScreenGui", { Name = "Oxiasidian", ResetOnSpawn = false,
 		IgnoreGuiInset = true, DisplayOrder = 10, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, parent)
 
 	-- ขนาด compact + clamp มือถือให้เห็นทั้งหมด
@@ -1367,6 +1367,7 @@ function Library:CreateWindow(...)
 		pcall(function()
 			if getgenv then
 				getgenv().OxiasidianActive = nil
+				getgenv().OxiasidianGUI = nil
 				getgenv().QuantumOnyxGUI = nil
 			end
 		end)
@@ -2952,10 +2953,12 @@ end
 Library.CreateWindow, Library.createWindow, Library.NewWindow =
 	Library.CreateWindow, Library.CreateWindow, Library.CreateWindow
 
--- จำตัวเองลง getgenv ทุกครั้งที่ไฟล์นี้ถูกรัน (รัน lib ก่อน 1 ครั้ง
--- แล้วสคริปต์อื่น/EXAMPLE ที่รันทีหลังจะเจอผ่าน getgenv().QuantumOnyxGUI ทันที)
+-- จำตัวเองลง getgenv ทุกครั้งที่ไฟล์นี้ถูกรัน
 pcall(function()
-	if getgenv then getgenv().QuantumOnyxGUI = Library end
+	if getgenv then
+		getgenv().OxiasidianGUI = Library
+		getgenv().QuantumOnyxGUI = nil
+	end
 end)
 
 return Library
