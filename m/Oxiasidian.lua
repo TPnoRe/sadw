@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.9"
+Library.Version = "3.3.0"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -1195,6 +1195,7 @@ function Library:CreateWindow(...)
 		_contentWrap = contentWrap, _float = floatBtn, _theme = theme, _themeName = themeName,
 		_tabs = {}, _activeTab = nil, _open = true,
 		_conns = {}, _children = {}, _themed = {}, _onStopAll = onStopAll,
+		_onReloadUI = cfg.OnReloadUI or cfg.onReloadUI,
 		Title = title, Subtitle = subtitle, Version = version,
 		Config = ConfigSystem,
 		UIConfig = ConfigSystem,
@@ -2887,9 +2888,42 @@ function Library:CreateWindow(...)
 			end
 		end)
 		hk:addButton("Re-open window", function()
-			local guiVer = tostring(Library.Version or "3.2.9")
-			Window:Notify({ Title = "Config", Description = "กำลังโหลดและอัปเดต Config ใหม่ทั้งหมด..." })
+			Window:Notify({ Title = "Config", Description = "กำลังตรวจสอบอัปเดตและโหลด Config..." })
+			local hasNewVersion = false
+			local latestVer = Library.Version
+			pcall(function()
+				if game and game.HttpGet then
+					local url = "https://raw.githubusercontent.com/TPnoRe/sadw/main/m/Oxiasidian.lua?t=" .. tick() .. "&r=" .. math.random(1000, 9999)
+					local src = game:HttpGet(url)
+					if isStr(src) and #src > 100 then
+						local v = src:match('Library%.Version%s*=%s*["\']([^"\']+)["\']')
+						if v and v ~= "" then
+							latestVer = v
+							if v ~= Library.Version then
+								hasNewVersion = true
+							end
+						end
+					end
+				end
+			end)
+
+			if hasNewVersion then
+				Window:Notify({
+					Title = "GUI Upgrading",
+					Description = "พบเวอร์ชันใหม่ v" .. latestVer .. " กำลังอัปเกรด GUI...",
+				})
+				task.wait(0.3)
+				if isFn(Window._onReloadUI) then
+					pcall(function() Window._onReloadUI() end)
+					return
+				elseif isFn(Library.HardReload) then
+					pcall(function() Library.HardReload() end)
+					return
+				end
+			end
+
 			local ok, count = Window:ReloadConfig()
+			local guiVer = tostring(Library.Version or "3.3.0")
 			Window:Notify({
 				Title = "Config Updated (v" .. guiVer .. ")",
 				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ) | GUI Version: " .. guiVer,
