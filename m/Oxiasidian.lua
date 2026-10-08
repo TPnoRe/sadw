@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.0"
+Library.Version = "3.2.1"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -758,29 +758,45 @@ local function EnsureNotif()
 	NotifHolder = New("Frame", { Name = "Holder", AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 12), Size = UDim2.new(0, 290, 1, -24),
 		BackgroundTransparency = 1 }, NotifGui)
-	List(NotifHolder, 8)
-	NotifHolder.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	local notifLayout = List(NotifHolder, 8)
+	notifLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	return NotifGui
 end
 local function ParseNotify(args)
-	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 4 } end
+	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 8 } end
 	if isTbl(args[1]) and (args[1].Title ~= nil or args[1].Description ~= nil or args[1].description ~= nil) then
 		local d, o = args[1], (isTbl(args[2]) and args[2] or {})
-		local t = tonumber(o.Time or o.time or o.Duration or 4) or 4
+		local t = tonumber(o.Time or o.time or o.Duration or 8) or 8
 		if isNum(args[2]) then t = args[2] end
 		return { Title = toStr(d.Title or d.title or "Oxiasidian"),
 			Description = toStr(d.Description or d.description or d.Desc or ""),
 			Buttons = d.Buttons or d.buttons, Id = d.Id or d.id, Time = clamp(t, 1, 30) }
 	end
 	return { Title = toStr(args[1]), Description = toStr(args[2] or ""),
-		Time = clamp(tonumber(args[3]) or 4, 1, 30), Buttons = (isTbl(args[4]) and args[4] or nil),
+		Time = clamp(tonumber(args[3]) or 8, 1, 30), Buttons = (isTbl(args[4]) and args[4] or nil),
 		Id = (args[5] ~= nil and toStr(args[5]) or nil) }
 end
 local function ShowNotif(parsed, theme, kind)
 	EnsureNotif()
 	theme = theme or ThemeSystem.Resolve("Purple")
 	if parsed.Id and parsed.Id ~= "" and NotifById[parsed.Id] then
-		pcall(function() NotifById[parsed.Id]:Destroy() end)
+		local existing = NotifById[parsed.Id]
+		if existing and existing.Parent then
+			local tLbl = existing:FindFirstChild("TitleLabel", true)
+			local dLbl = existing:FindFirstChild("DescLabel", true)
+			if tLbl then tLbl.Text = parsed.Title end
+			if dLbl then dLbl.Text = parsed.Description end
+			existing._timerToken = (existing._timerToken or 0) + 1
+			local myToken = existing._timerToken
+			task.delay(parsed.Time, function()
+				if existing and existing.Parent and existing._timerToken == myToken then
+					Tween(existing, { BackgroundTransparency = 1 })
+					task.delay(0.16, function() pcall(function() existing:Destroy() end) end)
+					if NotifById[parsed.Id] == existing then NotifById[parsed.Id] = nil end
+				end
+			end)
+			return existing
+		end
 		NotifById[parsed.Id] = nil
 	end
 	-- มือถือจอแคบ: การ์ดเต็มความกว้าง
@@ -800,10 +816,10 @@ local function ShowNotif(parsed, theme, kind)
 		BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
 	Corner(accBar, 2)
 	local list = List(card, 3)
-	New("TextLabel", { Size = UDim2.new(1, -4, 0, 17), BackgroundTransparency = 1, Text = parsed.Title,
+	New("TextLabel", { Name = "TitleLabel", Size = UDim2.new(1, -4, 0, 17), BackgroundTransparency = 1, Text = parsed.Title,
 		Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = theme.Text, LayoutOrder = 1 }, card)
-	New("TextLabel", { Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+	New("TextLabel", { Name = "DescLabel", Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1, Text = parsed.Description, Font = Enum.Font.Gotham, TextSize = 12,
 		TextWrapped = true, RichText = true, TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = theme.TextMuted, LayoutOrder = 2 }, card)
@@ -829,9 +845,10 @@ local function ShowNotif(parsed, theme, kind)
 			end)
 		end
 	end
+	card._timerToken = 1
 	if parsed.Id and parsed.Id ~= "" then NotifById[parsed.Id] = card end
 	task.delay(parsed.Time, function()
-		if card and card.Parent then
+		if card and card.Parent and card._timerToken == 1 then
 			Tween(card, { BackgroundTransparency = 1 })
 			task.delay(0.16, function() pcall(function() card:Destroy() end) end)
 			if parsed.Id and NotifById[parsed.Id] == card then NotifById[parsed.Id] = nil end
