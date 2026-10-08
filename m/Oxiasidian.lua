@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.3.0"
+Library.Version = "3.3.1"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -813,23 +813,18 @@ local function EnsureNotif()
 	return NotifGui
 end
 local function ParseNotify(args)
-	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 3 } end
+	if #args == 0 then return { Title = "Oxiasidian", Description = "", Time = 1 } end
 	if isTbl(args[1]) and (args[1].Title ~= nil or args[1].Description ~= nil or args[1].description ~= nil) then
 		local d, o = args[1], (isTbl(args[2]) and args[2] or {})
 		local btns = d.Buttons or d.buttons
-		local t = 3
-		if btns and (isTbl(btns) and #btns > 0) then
-			t = tonumber(d.Time or d.time or d.Duration or o.Time or o.time or o.Duration or 3) or 3
-		end
+		local t = tonumber(o.Time or o.time or o.Duration or d.Time or d.time or d.Duration or 1) or 1
+		if isNum(args[2]) then t = args[2] end
 		return { Title = toStr(d.Title or d.title or "Oxiasidian"),
 			Description = toStr(d.Description or d.description or d.Desc or ""),
 			Buttons = btns, Id = d.Id or d.id, Time = clamp(t, 1, 30) }
 	end
 	local btns = (isTbl(args[4]) and args[4] or nil)
-	local t = 3
-	if btns and (isTbl(btns) and #btns > 0) then
-		t = tonumber(args[3]) or 3
-	end
+	local t = tonumber(args[3]) or 1
 	return { Title = toStr(args[1]), Description = toStr(args[2] or ""),
 		Time = clamp(t, 1, 30), Buttons = btns,
 		Id = (args[5] ~= nil and toStr(args[5]) or nil) }
@@ -2923,7 +2918,7 @@ function Library:CreateWindow(...)
 			end
 
 			local ok, count = Window:ReloadConfig()
-			local guiVer = tostring(Library.Version or "3.3.0")
+			local guiVer = tostring(Library.Version or "3.3.1")
 			Window:Notify({
 				Title = "Config Updated (v" .. guiVer .. ")",
 				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ) | GUI Version: " .. guiVer,
