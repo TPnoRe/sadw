@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.5"
+Library.Version = "3.2.6"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -2779,8 +2779,10 @@ function Library:CreateWindow(...)
 		Tab.AddSection, Tab.CreateSection, Tab.addsection = Tab.addSection, Tab.addSection, Tab.addSection
 		table.insert(Window._tabs, Tab)
 		AddChild(Window, Tab)
-		-- เลือก tab แรกอัตโนมัติ
-		if #Window._tabs == 1 then
+		-- เลือกหน้า Home เท่านั้น (หรือ tab แรกที่ไม่ใช่ Settings/Config)
+		if tostring(name):lower() == "home" then
+			task.defer(function() pcall(function() Tab:Select() end) end)
+		elseif #Window._tabs == 1 and not isConfig then
 			task.defer(function() pcall(function() Tab:Select() end) end)
 		end
 		return Tab
