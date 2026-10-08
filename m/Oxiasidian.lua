@@ -1654,20 +1654,23 @@ function Library:CreateWindow(...)
 					-- restore from config if available
 					local savedDef = ConfigSystem:Get(saveKey, def, "Slider")
 					if type(savedDef) == "number" then def = clamp(savedDef, min, max) end
-					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 46),
+					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 48),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
 					Stroke(row, Window._theme.BorderSoft, 1).Transparency = 0.4
-					local tl = New("TextLabel", { Position = UDim2.new(0, 9, 0, 3), Size = UDim2.new(1, -75, 0, 15),
+					local tl = New("TextLabel", { Position = UDim2.new(0, 9, 0, 5), Size = UDim2.new(1, -75, 0, 16),
 						BackgroundTransparency = 1, Text = label, Font = Enum.Font.GothamBold, TextSize = 12,
 						TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 						TextColor3 = Window._theme.Text }, row)
-					local val = New("TextBox", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 3),
-						Size = UDim2.new(0, 65, 0, 16), BackgroundTransparency = 1, Text = toStr(def),
-						Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right,
+					local val = New("TextBox", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 4),
+						Size = UDim2.new(0, 52, 0, 18), BackgroundColor3 = Window._theme.Surface2,
+						BackgroundTransparency = 0, BorderSizePixel = 0, Text = toStr(def),
+						Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Center,
 						TextColor3 = Window._theme.AccentHover, ClearTextOnFocus = false,
 						TextEditable = not locked }, row)
-					local bar = New("TextButton", { Position = UDim2.new(0, 9, 0, 20), Size = UDim2.new(1, -18, 0, 20),
+					Corner(val, 4)
+					local valStroke = Stroke(val, Window._theme.Border, 1)
+					local bar = New("TextButton", { Position = UDim2.new(0, 9, 0, 26), Size = UDim2.new(1, -18, 0, 18),
 						BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, row)
 					local track = New("Frame", { Position = UDim2.new(0, 0, 0.5, -2), Size = UDim2.new(1, 0, 0, 4),
 						BackgroundColor3 = Window._theme.Surface3, BorderSizePixel = 0, Active = false }, bar)
@@ -1685,7 +1688,9 @@ function Library:CreateWindow(...)
 					OnTheme(function(t)
 						row.BackgroundColor3 = t.Surface
 						tl.TextColor3 = comp._locked and t.TextDim or t.Text
+						val.BackgroundColor3 = t.Surface2
 						val.TextColor3 = comp._locked and t.TextDim or t.AccentHover
+						valStroke.Color = t.Border
 						track.BackgroundColor3 = t.Surface3
 						fill.BackgroundColor3 = t.Accent
 					end)
@@ -1721,6 +1726,7 @@ function Library:CreateWindow(...)
 					-- รองรับการพิมพ์ตัวเลขลงในช่องโดยตรง
 					Track(comp, val.Focused:Connect(function()
 						val.TextColor3 = Color3.fromRGB(255, 255, 255)
+						valStroke.Color = Window._theme.Accent
 					end))
 					Track(comp, val:GetPropertyChangedSignal("Text"):Connect(function()
 						if val:IsFocused() then
@@ -1732,6 +1738,7 @@ function Library:CreateWindow(...)
 					end))
 					Track(comp, val.FocusLost:Connect(function(enter)
 						val.TextColor3 = Window._theme.AccentHover
+						valStroke.Color = Window._theme.Border
 						local num = tonumber(val.Text)
 						if num ~= nil then
 							Apply(num, true)
