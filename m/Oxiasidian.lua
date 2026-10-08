@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.3.2"
+Library.Version = "3.3.3"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -551,9 +551,11 @@ function PlayerConfig:AutoLoad()
 		if isStr(content) and #content > 1 then
 			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
 			if ok and isTbl(dec) then
-				self.Data = dec
+				for k, v in pairs(dec) do
+					self.Data[k] = v
+				end
 				if isTbl(self.BoundSettings) then
-					for k, v in pairs(dec) do
+					for k, v in pairs(self.Data) do
 						pcall(function() self.BoundSettings[k] = DeserializeConfigValue(v) end)
 					end
 				end
@@ -561,7 +563,9 @@ function PlayerConfig:AutoLoad()
 			end
 		end
 	end
-	self.Data = {}
+	if not self.Data or type(self.Data) ~= "table" then
+		self.Data = {}
+	end
 	return false
 end
 
@@ -706,12 +710,16 @@ function ConfigSystem:AutoLoad()
 		if isStr(content) and #content > 1 then
 			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
 			if ok and isTbl(dec) then
-				self.Data = dec
+				for k, v in pairs(dec) do
+					self.Data[k] = v
+				end
 				return true
 			end
 		end
 	end
-	self.Data = {}
+	if not self.Data or type(self.Data) ~= "table" then
+		self.Data = {}
+	end
 	return false
 end
 
@@ -1133,8 +1141,8 @@ function Library:CreateWindow(...)
 	New("TextLabel", { Position = UDim2.new(0, 29, 0, 5), Size = UDim2.new(0, 200, 0, 18),
 		BackgroundTransparency = 1, Text = string.upper(title), Font = Enum.Font.GothamBlack,
 		TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.Text }, header)
-	New("TextLabel", { Position = UDim2.new(0, 29, 0, 22), Size = UDim2.new(0, 220, 0, 14),
-		BackgroundTransparency = 1, Text = subtitle .. " · " .. version, Font = Enum.Font.Gotham,
+	local verLabel = New("TextLabel", { Position = UDim2.new(0, 29, 0, 22), Size = UDim2.new(0, 220, 0, 14),
+		BackgroundTransparency = 1, Text = subtitle .. " · " .. version .. " (v" .. tostring(Library.Version) .. ")", Font = Enum.Font.Gotham,
 		TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.TextMuted }, header)
 	local function HBtn(txt, x)
 		local b = New("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, x, 0.5, 0),
@@ -1188,7 +1196,7 @@ function Library:CreateWindow(...)
 	local Window = {
 		_gui = gui, _main = main, _navScroll = navScroll, _cfgWrap = cfgWrap,
 		_contentWrap = contentWrap, _float = floatBtn, _theme = theme, _themeName = themeName,
-		_tabs = {}, _activeTab = nil, _open = true,
+		_tabs = {}, _activeTab = nil, _open = true, _verLabel = verLabel,
 		_conns = {}, _children = {}, _themed = {}, _onStopAll = onStopAll,
 		_onReloadUI = cfg.OnReloadUI or cfg.onReloadUI,
 		Title = title, Subtitle = subtitle, Version = version,
@@ -1283,6 +1291,19 @@ function Library:CreateWindow(...)
 	function Window:Minimize(...) self:_ApplyVisible(false) end
 	-- โหลดและอัปเดต Config ใหม่ทั้งหมดจากดิสก์ พร้อมซิงค์ UI Components ทุกตัว
 	function Window:ReloadConfig()
+		-- บันทึกค่าปัจจุบันในหน่วยความจำลงดิสก์ก่อนเสมอ เพื่อไม่ให้ Config เดิมตกหล่น
+		pcall(function()
+			if isTbl(PlayerConfig.BoundSettings) then
+				for k, v in pairs(PlayerConfig.BoundSettings) do
+					if PlayerConfig.Data[toStr(k)] == nil then
+						PlayerConfig.Data[toStr(k)] = SerializeConfigValue(v)
+					end
+				end
+			end
+			PlayerConfig:Flush()
+		end)
+		pcall(function() ConfigSystem:Flush() end)
+
 		local pOk = false
 		pcall(function() pOk = PlayerConfig:AutoLoad() end)
 		local cOk = false
@@ -2884,9 +2905,20 @@ function Library:CreateWindow(...)
 			end
 		end)
 		hk:addButton("Re-open window", function()
-			Window:Notify({ Title = "Config", Description = "กำลังตรวจสอบอัปเดตและโหลด Config..." })
-			local hasNewVersion = false
-			local latestVer = Library.Version
+			-- 1. บันทึกและ Flush Config เดิมในหน่วยความจำลงดิสก์ก่อนเสมอ เพื่อรักษา Config เดิมไว้
+			pcall(function()
+				if isTbl(PlayerConfig.BoundSettings) then
+					for k, v in pairs(PlayerConfig.BoundSettings) do
+						if PlayerConfig.Data[toStr(k)] == nil then
+							PlayerConfig.Data[toStr(k)] = SerializeConfigValue(v)
+						end
+					end
+				end
+				PlayerConfig:Flush()
+				ConfigSystem:Flush()
+			end)
+
+			-- 2. ตรวจสอบเวอร์ชันล่าสุดผ่าน GitHub (ไม่ Rejoin เซิร์ฟเวอร์ และไม่ Destroy/Reload ที่ทำให้หลุด)
 			pcall(function()
 				if game and game.HttpGet then
 					local url = "https://raw.githubusercontent.com/TPnoRe/sadw/main/m/Oxiasidian.lua?t=" .. tick() .. "&r=" .. math.random(1000, 9999)
@@ -2894,37 +2926,31 @@ function Library:CreateWindow(...)
 					if isStr(src) and #src > 100 then
 						local v = src:match('Library%.Version%s*=%s*["\']([^"\']+)["\']')
 						if v and v ~= "" then
-							latestVer = v
-							if v ~= Library.Version then
-								hasNewVersion = true
-							end
+							Library.Version = v
 						end
 					end
 				end
 			end)
 
-			if hasNewVersion then
-				Window:Notify({
-					Title = "GUI Upgrading",
-					Description = "พบเวอร์ชันใหม่ v" .. latestVer .. " กำลังอัปเกรด GUI...",
-				})
-				task.wait(0.3)
-				if isFn(Window._onReloadUI) then
-					pcall(function() Window._onReloadUI() end)
-					return
-				elseif isFn(Library.HardReload) then
-					pcall(function() Library.HardReload() end)
-					return
-				end
+			local guiVer = tostring(Library.Version or "3.3.3")
+			if Window._verLabel then
+				pcall(function()
+					Window._verLabel.Text = tostring(Window.Subtitle or "Blox Fruit") .. " · " .. tostring(Window.Version or "v.Premium") .. " (v" .. guiVer .. ")"
+				end)
 			end
 
+			-- 3. โหลดและซิงค์ Config เดิมเข้ากับ UI Components ทั้งหมด
 			local ok, count = Window:ReloadConfig()
-			local guiVer = tostring(Library.Version or "3.3.1")
-			Window:Notify({
-				Title = "Config Updated (v" .. guiVer .. ")",
-				Description = "อัปเดต Config เรียบร้อยแล้ว (" .. tostring(count or 0) .. " รายการ) | GUI Version: " .. guiVer,
-			})
+
+			-- 4. เปิดหน้าต่างขึ้นมาทันทีในเซิร์ฟเวอร์เดิม (ไม่หลุด / ไม่ Rejoin เซิร์ฟ)
 			pcall(function() Window:Open() end)
+
+			-- 5. แจ้งเตือนสถานะพร้อมเวอร์ชัน GUI ล่าสุด
+			Window:Notify({
+				Title = "Oxiasidian GUI (v" .. guiVer .. ")",
+				Description = "เปิดหน้าต่างและโหลด Config เดิมเรียบร้อย (" .. tostring(count or 0) .. " รายการ)",
+				Time = 3,
+			})
 		end)
 		return cfgTab
 	end
@@ -2933,11 +2959,11 @@ function Library:CreateWindow(...)
 
 	-- ======================= 11. Cleanup =====================================
 	function Window:Destroy(...)
-		local stop = self._onStopAll
-		if isFn(stop) then pcall(stop) end
-		-- flush pending config saves before GUI is gone
+		-- flush pending config saves before stopping or destroying
 		pcall(function() ConfigSystem:Flush() end)
 		pcall(function() PlayerConfig:Flush() end)
+		local stop = self._onStopAll
+		if isFn(stop) then pcall(stop) end
 		for _, t in ipairs(self._tabs) do DisconnectAll(t) end
 		DisconnectAll(self)
 		pcall(function() self._gui:Destroy() end)
