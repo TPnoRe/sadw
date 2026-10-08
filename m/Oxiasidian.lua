@@ -628,8 +628,8 @@ PlayerConfig.SetState = PlayerConfig.Set
 
 -- ================== 10.3 UI Config System (OxiasidianUI/Config/<SaveFile>.json) ==================
 local ConfigSystem = {
-	File = "OxiasidianConfig",
-	Data = {},              -- [key] = serializedValue (UI controls ONLY)
+	File = "Configs",
+	Data = {},              -- [key] = serializedValue (UI controls ONLY: Theme, Hotkey)
 	Registry = {},          -- [key] = component
 	_saveThread = nil,
 	_isSaving = false,
@@ -640,8 +640,8 @@ function ConfigSystem:Path()
 end
 
 function ConfigSystem:Init(fileName)
-	fileName = toStr(fileName or "OxiasidianConfig")
-	if fileName == "" then fileName = "OxiasidianConfig" end
+	fileName = toStr(fileName or "Configs")
+	if fileName == "" or fileName == "OxiasidianConfig" then fileName = "Configs" end
 	self.File = fileName:gsub("[^%w%-%_]", "_")
 	self.Data = {}
 	self:AutoLoad()
@@ -650,8 +650,14 @@ end
 function ConfigSystem:AutoLoad()
 	local path = self:Path()
 	if not SafeIsFile(path) then
-		local legacyPath = "OxiasidianUI/" .. self.File .. ".json"
-		if SafeIsFile(legacyPath) then path = legacyPath end
+		local cand1 = "OxiasidianUI/Config/Configs.json"
+		local cand2 = "OxiasidianUI/Config/Conifgs.json"
+		local cand3 = "OxiasidianUI/Config/BloxFruits.json"
+		local cand4 = "OxiasidianUI/Configs.json"
+		if SafeIsFile(cand1) then path = cand1
+		elseif SafeIsFile(cand2) then path = cand2
+		elseif SafeIsFile(cand3) then path = cand3
+		elseif SafeIsFile(cand4) then path = cand4 end
 	end
 	if SafeIsFile(path) then
 		local content = SafeReadFile(path)
@@ -891,11 +897,12 @@ function Library:CreateWindow(...)
 	local title = toStr(cfg.Title or cfg.title or "Oxiasidian")
 	local subtitle = toStr(cfg.Subtitle or cfg.subtitle or "Blox Fruit")
 	local version = toStr(cfg.Version or cfg.version or "v.Premium")
-	-- ---- Init ConfigSystem (UI Config) ----
-	local saveFile = toStr(cfg.SaveFile or cfg.saveFile or cfg.savefile or "OxiasidianConfig")
-	ConfigSystem:Init(saveFile)
+	-- ---- Init ConfigSystem (UI Config: Theme, Hotkey, UI controls) ----
+	local uiConfigFile = toStr(cfg.ConfigFile or cfg.configFile or cfg.UIConfig or "Configs")
+	ConfigSystem:Init(uiConfigFile)
 	-- ---- Init PlayerConfig (Function Config: Settings) ----
-	local gameName = cfg.GameName or cfg.gameName or cfg.Game or cfg.game
+	local saveFile = toStr(cfg.SaveFile or cfg.saveFile or cfg.savefile or "BloxFruits")
+	local gameName = cfg.GameName or cfg.gameName or cfg.Game or cfg.game or saveFile
 	PlayerConfig:Init(gameName, saveFile)
 	local boundSettings = cfg.Settings or cfg.settings
 	if not boundSettings then
