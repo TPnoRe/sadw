@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.3.3"
+Library.Version = "3.3.4"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -1333,7 +1333,7 @@ function Library:CreateWindow(...)
 
 					if val ~= nil and isFn(comp.SetValue) then
 						pcall(function()
-							comp:SetValue(val)
+							comp:SetValue(val, false)
 							updatedCount = updatedCount + 1
 						end)
 					end
@@ -1709,7 +1709,10 @@ function Library:CreateWindow(...)
 					end
 					comp.GetValue = function() return comp._value end
 					comp.Get = comp.GetValue
-					comp.SetValue = function(a, b) Apply((b ~= nil and b or a), true) end
+					comp.SetValue = function(...)
+						local args = Pack(comp, ...)
+						Apply(args[1], args[2] ~= false)
+					end
 					comp.Update = comp.SetValue
 					comp.Set = comp.SetValue
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) end
@@ -1949,7 +1952,10 @@ function Library:CreateWindow(...)
 					end
 					comp.GetValue = function() return comp._value end
 					comp.Get = comp.GetValue
-					comp.SetValue = function(a2, b2) Apply((b2 ~= nil and b2 or a2), true) end
+					comp.SetValue = function(...)
+						local args = Pack(comp, ...)
+						Apply(args[1], args[2] ~= false)
+					end
 					comp.Update = comp.SetValue
 					comp.Set = comp.SetValue
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) end
@@ -2333,18 +2339,20 @@ function Library:CreateWindow(...)
 						return comp._value
 					end
 					comp.Get = comp.GetValue
-					comp.SetValue = function(a2, b2)
-						local v = (b2 ~= nil and b2 or a2)
+					comp.SetValue = function(...)
+						local args = Pack(comp, ...)
+						local v = args[1]
+						local fire = args[2]
 						if multi then
 							table.clear(comp._multi)
 							if isTbl(v) then for _, x in ipairs(v) do comp._multi[toStr(x)] = true end
 							elseif v ~= nil then comp._multi[toStr(v)] = true end
 							PaintSel()
-							if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp.GetValue()) end) end
+							if fire ~= false and isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp.GetValue()) end) end
 						else
 							comp._value = NormDef(v, comp._options)
 							PaintSel()
-							if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp._value) end) end
+							if fire ~= false and isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp._value) end) end
 						end
 					end
 					comp.Update = comp.SetValue
@@ -2420,9 +2428,9 @@ function Library:CreateWindow(...)
 						end
 					end
 					if not saveKey or saveKey == "" then
-						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
+						saveKey = nil
 					end
-					local savedDef = ConfigSystem:Get(saveKey, nil, "Textbox")
+					local savedDef = saveKey and ConfigSystem:Get(saveKey, nil, "Textbox") or nil
 					if savedDef ~= nil then def = toStr(savedDef) end
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 50),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
@@ -2451,20 +2459,27 @@ function Library:CreateWindow(...)
 					local function Apply(v, fire)
 						comp._value = toStr(v or "")
 						if tb.Text ~= comp._value then tb.Text = comp._value end
-						ConfigSystem:Set(comp._saveKey, comp._value)
-						if fire ~= false and isFn(comp._callback) then
+						if comp._saveKey then
+							ConfigSystem:Set(comp._saveKey, comp._value)
+						end
+						if fire == true and isFn(comp._callback) then
 							task.spawn(function() pcall(comp._callback, comp._value) end)
 						end
 					end
 					comp.GetValue = function() return comp._value end
 					comp.Get = comp.GetValue
-					comp.SetValue = function(a2, b2) Apply((b2 ~= nil and b2 or a2), true) end
+					comp.SetValue = function(...)
+						local args = Pack(comp, ...)
+						Apply(args[1], args[2] == true)
+					end
 					comp.Update = comp.SetValue
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) end
 					Track(comp, tb.FocusLost:Connect(function(enter)
-						if enter then Apply(tb.Text, true) else Apply(tb.Text, true) end
+						Apply(tb.Text, true)
 					end))
-					ConfigSystem:Register(comp._saveKey, comp)
+					if comp._saveKey then
+						ConfigSystem:Register(comp._saveKey, comp)
+					end
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -2932,7 +2947,7 @@ function Library:CreateWindow(...)
 				end
 			end)
 
-			local guiVer = tostring(Library.Version or "3.3.3")
+			local guiVer = tostring(Library.Version or "3.3.4")
 			if Window._verLabel then
 				pcall(function()
 					Window._verLabel.Text = tostring(Window.Subtitle or "Blox Fruit") .. " · " .. tostring(Window.Version or "v.Premium") .. " (v" .. guiVer .. ")"
