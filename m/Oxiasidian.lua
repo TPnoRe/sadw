@@ -779,6 +779,33 @@ end
 local function ShowNotif(parsed, theme, kind)
 	EnsureNotif()
 	theme = theme or ThemeSystem.Resolve("Purple")
+	local function StartTimer(notifCard, totalTime, token)
+		local progFill = notifCard:FindFirstChild("ProgFill", true)
+		local tLbl = notifCard:FindFirstChild("TimerLabel", true)
+		if progFill then
+			progFill.Size = UDim2.new(1, 0, 1, 0)
+			Tween(progFill, { Size = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(totalTime, Enum.EasingStyle.Linear))
+		end
+		task.spawn(function()
+			local startTime = tick()
+			local endTime = startTime + totalTime
+			while notifCard and notifCard.Parent and notifCard._timerToken == token do
+				local remaining = endTime - tick()
+				if remaining <= 0 then break end
+				if tLbl and tLbl.Parent then
+					tLbl.Text = string.format("%.1fs", remaining)
+				end
+				task.wait(0.1)
+			end
+			if notifCard and notifCard.Parent and notifCard._timerToken == token then
+				if tLbl and tLbl.Parent then tLbl.Text = "0.0s" end
+				Tween(notifCard, { BackgroundTransparency = 1 })
+				task.delay(0.16, function() pcall(function() notifCard:Destroy() end) end)
+				if parsed.Id and NotifById[parsed.Id] == notifCard then NotifById[parsed.Id] = nil end
+			end
+		end)
+	end
+
 	if parsed.Id and parsed.Id ~= "" and NotifById[parsed.Id] then
 		local existing = NotifById[parsed.Id]
 		if existing and existing.Parent then
@@ -787,18 +814,12 @@ local function ShowNotif(parsed, theme, kind)
 			if tLbl then tLbl.Text = parsed.Title end
 			if dLbl then dLbl.Text = parsed.Description end
 			existing._timerToken = (existing._timerToken or 0) + 1
-			local myToken = existing._timerToken
-			task.delay(parsed.Time, function()
-				if existing and existing.Parent and existing._timerToken == myToken then
-					Tween(existing, { BackgroundTransparency = 1 })
-					task.delay(0.16, function() pcall(function() existing:Destroy() end) end)
-					if NotifById[parsed.Id] == existing then NotifById[parsed.Id] = nil end
-				end
-			end)
+			StartTimer(existing, parsed.Time, existing._timerToken)
 			return existing
 		end
 		NotifById[parsed.Id] = nil
 	end
+
 	-- มือถือจอแคบ: การ์ดเต็มความกว้าง
 	local vs = Viewport()
 	local w = (vs.X < 560) and math.max(220, vs.X - 24) or 290
@@ -806,23 +827,42 @@ local function ShowNotif(parsed, theme, kind)
 	if kind == "Success" then accent = theme.Success
 	elseif kind == "Warning" then accent = theme.Warning
 	elseif kind == "Error" then accent = theme.Error end
+
 	local card = New("Frame", { Name = "Notif", Size = UDim2.new(0, w, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = theme.Surface, BorderSizePixel = 0 }, NotifHolder)
 	Corner(card, 7)
 	Stroke(card, theme.Border, 1)
-	Pad(card, 9, 11, 9, 11)
-	-- แถบเล็ก fixed-height (ห้ามใช้ Y-scale ใน auto-size layout)
-	local accBar = New("Frame", { Size = UDim2.new(0, 3, 0, 22), Position = UDim2.new(0, 0, 0, 2),
-		BackgroundColor3 = accent, BorderSizePixel = 0 }, card)
+	Pad(card, 8, 10, 8, 10)
+	local list = List(card, 5)
+
+	-- แถวบนสุด (Header Row): เส้นสีม่วง + ข้อความหัวข้อ + เวลานับถอยหลัง อยู่ในแถวเดียวกัน
+	local headRow = New("Frame", { Name = "HeadRow", Size = UDim2.new(1, 0, 0, 18),
+		BackgroundTransparency = 1, LayoutOrder = 1 }, card)
+	local headLayout = New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6) }, headRow)
+
+	local accBar = New("Frame", { Name = "AccentBar", Size = UDim2.new(0, 3, 0, 14),
+		BackgroundColor3 = accent, BorderSizePixel = 0, LayoutOrder = 1 }, headRow)
 	Corner(accBar, 2)
-	local list = List(card, 3)
-	New("TextLabel", { Name = "TitleLabel", Size = UDim2.new(1, -4, 0, 17), BackgroundTransparency = 1, Text = parsed.Title,
-		Font = Enum.Font.GothamBold, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd, TextColor3 = theme.Text, LayoutOrder = 1 }, card)
-	New("TextLabel", { Name = "DescLabel", Size = UDim2.new(1, -4, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1, Text = parsed.Description, Font = Enum.Font.Gotham, TextSize = 12,
-		TextWrapped = true, RichText = true, TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = theme.TextMuted, LayoutOrder = 2 }, card)
+
+	local titleLbl = New("TextLabel", { Name = "TitleLabel", Size = UDim2.new(1, -54, 1, 0),
+		BackgroundTransparency = 1, Text = parsed.Title, Font = Enum.Font.GothamBold, TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+		TextColor3 = theme.Text, LayoutOrder = 2 }, headRow)
+
+	local timerLbl = New("TextLabel", { Name = "TimerLabel", Size = UDim2.new(0, 45, 1, 0),
+		BackgroundTransparency = 1, Text = string.format("%.1fs", parsed.Time),
+		Font = Enum.Font.GothamMedium, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = theme.TextMuted, LayoutOrder = 3 }, headRow)
+
+	-- ข้อความรายละเอียด (Description)
+	local descLbl = New("TextLabel", { Name = "DescLabel", Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, Text = parsed.Description,
+		Font = Enum.Font.Gotham, TextSize = 12, TextWrapped = true, RichText = true,
+		TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = theme.TextMuted, LayoutOrder = 2 }, card)
+
+	-- ปุ่ม (Buttons ถ้ามี)
 	if isTbl(parsed.Buttons) and #parsed.Buttons > 0 then
 		local row = New("Frame", { Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, LayoutOrder = 3 }, card)
 		local hl = New("UIListLayout", { Padding = UDim.new(0, 6), FillDirection = Enum.FillDirection.Horizontal,
@@ -845,15 +885,18 @@ local function ShowNotif(parsed, theme, kind)
 			end)
 		end
 	end
+
+	-- เส้นบอกเวลาที่เหลือ (Countdown Progress Bar)
+	local progTrack = New("Frame", { Name = "ProgTrack", Size = UDim2.new(1, 0, 0, 2),
+		BackgroundColor3 = theme.Surface2, BorderSizePixel = 0, LayoutOrder = 4 }, card)
+	Corner(progTrack, 1)
+	local progFill = New("Frame", { Name = "ProgFill", Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = accent, BorderSizePixel = 0 }, progTrack)
+	Corner(progFill, 1)
+
 	card._timerToken = 1
 	if parsed.Id and parsed.Id ~= "" then NotifById[parsed.Id] = card end
-	task.delay(parsed.Time, function()
-		if card and card.Parent and card._timerToken == 1 then
-			Tween(card, { BackgroundTransparency = 1 })
-			task.delay(0.16, function() pcall(function() card:Destroy() end) end)
-			if parsed.Id and NotifById[parsed.Id] == card then NotifById[parsed.Id] = nil end
-		end
-	end)
+	StartTimer(card, parsed.Time, 1)
 	return card
 end
 Library.Notification = {}
