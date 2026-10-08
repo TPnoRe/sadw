@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.3"
+Library.Version = "3.2.5"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -249,7 +249,49 @@ end
 Library.Themes = ThemeSystem.Themes
 Library.ThemeSystem = ThemeSystem
 
--- icon ตัวอักษร (เฉพาะ glyph ที่ฟอนต์ Roblox แสดงผลชัวร์ทั้ง PC/มือถือ)
+-- icon ที่ Roblox รองรับอย่างเป็นทางการ (Official Lucide & CoreGui asset IDs โหลดติดชัวร์ทุกแพลตฟอร์ม)
+local RobloxIcons = {
+	["bell"] = "rbxassetid://6031075931",
+	["info"] = "rbxassetid://6031086208",
+	["success"] = "rbxassetid://6031094678",
+	["check"] = "rbxassetid://6031094678",
+	["warning"] = "rbxassetid://6031084226",
+	["alert"] = "rbxassetid://6031084226",
+	["error"] = "rbxassetid://6031094687",
+	["close"] = "rbxassetid://6031094687",
+	["home"] = "rbxassetid://6031075929",
+	["swords"] = "rbxassetid://6031088661",
+	["sword"] = "rbxassetid://6031088661",
+	["ship"] = "rbxassetid://6031082533",
+	["user"] = "rbxassetid://6031088673",
+	["player"] = "rbxassetid://6031088673",
+	["visual"] = "rbxassetid://6031079895",
+	["eye"] = "rbxassetid://6031079895",
+	["raid"] = "rbxassetid://6031097225",
+	["shield"] = "rbxassetid://6031097225",
+	["rabbit"] = "rbxassetid://6031077360",
+	["zap"] = "rbxassetid://6031077360",
+	["map"] = "rbxassetid://6031086221",
+	["cart"] = "rbxassetid://6031075938",
+	["shop"] = "rbxassetid://6031075938",
+	["misc"] = "rbxassetid://6031082525",
+	["cat"] = "rbxassetid://6031075931",
+	["config"] = "rbxassetid://6031097229",
+	["settings"] = "rbxassetid://6031097229",
+}
+
+local function ResolveIcon(id, fallback)
+	if not isStr(id) or id == "" then return fallback or RobloxIcons["bell"] end
+	if id:find("rbxasset") then return id end
+	local num = tonumber(id)
+	if num then return "rbxassetid://" .. tostring(num) end
+	local l = string.lower(id)
+	if RobloxIcons[l] then return RobloxIcons[l] end
+	local trimmed = l:gsub("%-oxiasidian$", "")
+	if RobloxIcons[trimmed] then return RobloxIcons[trimmed] end
+	return fallback or RobloxIcons["bell"]
+end
+
 local IconMap = { ["home-oxiasidian"]="●", ["swords-oxiasidian"]="×", ["ship-oxiasidian"]="~",
 	["user-oxiasidian"]="○", ["visual-oxiasidian"]="*", ["raid-oxiasidian"]="#",
 	["rabbit-oxiasidian"]="◆", ["map-oxiasidian"]="@", ["cart-oxiasidian"]="$",
@@ -749,7 +791,15 @@ Library.PlayerConfig = PlayerConfig
 Library.FunctionConfig = PlayerConfig
 
 -- ============================ 6. Notifications ===============================
-local NotifGui, NotifHolder, NotifById, CardTokens = nil, nil, {}, {}
+local NotifGui, NotifHolder, NotifById, CardTokens, ActiveNotifs = nil, nil, {}, {}, {}
+local function RemoveActiveNotif(card)
+	for i = #ActiveNotifs, 1, -1 do
+		if ActiveNotifs[i] == card then
+			table.remove(ActiveNotifs, i)
+			break
+		end
+	end
+end
 local function EnsureNotif()
 	if NotifGui and NotifGui.Parent then return NotifGui end
 	local parent = GetUIParent()
@@ -808,6 +858,7 @@ local function ShowNotif(parsed, theme, kind)
 			end
 
 			if notifCard and notifCard.Parent and CardTokens[notifCard] == token then
+				RemoveActiveNotif(notifCard)
 				if progFill and progFill.Parent then
 					progFill.Size = UDim2.new(0, 0, 1, 0)
 				end
@@ -831,8 +882,16 @@ local function ShowNotif(parsed, theme, kind)
 		if existing and existing.Parent then
 			local tLbl = existing:FindFirstChild("TitleLabel", true)
 			local dLbl = existing:FindFirstChild("DescLabel", true)
+			local iLbl = existing:FindFirstChild("IconLabel", true)
 			if tLbl then tLbl.Text = parsed.Title end
 			if dLbl then dLbl.Text = parsed.Description end
+			if iLbl then
+				local newIcon = ResolveIcon(parsed.Icon, (kind == "Success" and RobloxIcons["success"]) or (kind == "Warning" and RobloxIcons["warning"]) or (kind == "Error" and RobloxIcons["error"]) or RobloxIcons["bell"])
+				iLbl.Image = newIcon
+				iLbl.ImageColor3 = accent
+			end
+			RemoveActiveNotif(existing)
+			table.insert(ActiveNotifs, existing)
 			CardTokens[existing] = (CardTokens[existing] or 0) + 1
 			StartTimer(existing, parsed.Time, CardTokens[existing])
 			return existing
@@ -855,18 +914,20 @@ local function ShowNotif(parsed, theme, kind)
 	Pad(card, 8, 10, 8, 10)
 	local list = List(card, 5)
 
-	-- แถวบนสุด (Header Row): เส้นสีม่วง + ข้อความหัวข้อ + เวลานับถอยหลัง อยู่ในแถวเดียวกัน
+	-- แถวบนสุด (Header Row): ไอคอน Roblox + ข้อความหัวข้อ + เวลานับถอยหลัง อยู่ในแถวเดียวกัน
 	local headRow = New("Frame", { Name = "HeadRow", Size = UDim2.new(1, 0, 0, 18),
 		BackgroundTransparency = 1, LayoutOrder = 1 }, card)
 	local headLayout = New("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal,
 		VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 6) }, headRow)
 
-	local accBar = New("Frame", { Name = "AccentBar", Size = UDim2.new(0, 3, 0, 14),
-		BackgroundColor3 = accent, BorderSizePixel = 0, LayoutOrder = 1 }, headRow)
-	Corner(accBar, 2)
+	local iconAsset = ResolveIcon(parsed.Icon, (kind == "Success" and RobloxIcons["success"]) or (kind == "Warning" and RobloxIcons["warning"]) or (kind == "Error" and RobloxIcons["error"]) or RobloxIcons["bell"])
 
-	local titleLbl = New("TextLabel", { Name = "TitleLabel", Size = UDim2.new(1, -54, 1, 0),
+	local iconImg = New("ImageLabel", { Name = "IconLabel", Size = UDim2.new(0, 16, 0, 16),
+		BackgroundTransparency = 1, Image = iconAsset, ImageColor3 = accent,
+		ScaleType = Enum.ScaleType.Fit, LayoutOrder = 1 }, headRow)
+
+	local titleLbl = New("TextLabel", { Name = "TitleLabel", Size = UDim2.new(1, -72, 1, 0),
 		BackgroundTransparency = 1, Text = parsed.Title, Font = Enum.Font.GothamBold, TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
 		TextColor3 = theme.Text, LayoutOrder = 2 }, headRow)
@@ -900,6 +961,7 @@ local function ShowNotif(parsed, theme, kind)
 			Pad(btn, 0, 6, 0, 6)
 			btn.MouseButton1Click:Connect(function()
 				pcall(function() if isFn(cb) then cb() end end)
+				RemoveActiveNotif(card)
 				CardTokens[card] = -1
 				pcall(function() card:Destroy() end)
 				if parsed.Id then NotifById[parsed.Id] = nil end
@@ -917,6 +979,20 @@ local function ShowNotif(parsed, theme, kind)
 
 	CardTokens[card] = 1
 	if parsed.Id and parsed.Id ~= "" then NotifById[parsed.Id] = card end
+
+	table.insert(ActiveNotifs, card)
+	while #ActiveNotifs > 5 do
+		local oldest = table.remove(ActiveNotifs, 1)
+		if oldest and oldest.Parent then
+			CardTokens[oldest] = -1
+			Tween(oldest, { BackgroundTransparency = 1 })
+			task.delay(0.15, function()
+				pcall(function() oldest:Destroy() end)
+				CardTokens[oldest] = nil
+			end)
+		end
+	end
+
 	StartTimer(card, parsed.Time, 1)
 	return card
 end
