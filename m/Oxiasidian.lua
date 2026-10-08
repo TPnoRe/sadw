@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.1.1"
+Library.Version = "3.2.0"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -265,153 +265,368 @@ local function IconText(id)
 	return "-"
 end
 
--- ================== 10. Configuration (แยกไฟล์, มี fallback) ===============
+-- ================== 10. Lightweight Auto-Config System ==================
 local MemoryFiles = {}
-local function IsFile(p)
-	local ok, r = pcall(function() if isfile then return isfile(p) end return MemoryFiles[p] ~= nil end)
-	if ok then return r end
-	return MemoryFiles[p] ~= nil
+local function SafeIsFile(path)
+	local ok, res = pcall(function()
+		if isfile then return isfile(path) end
+		return MemoryFiles[path] ~= nil
+	end)
+	return ok and (res == true)
 end
-local function ReadFile(p)
-	local ok, r = pcall(function() if readfile then return readfile(p) end return MemoryFiles[p] end)
-	if ok then return r end
-	return MemoryFiles[p]
+
+local function SafeReadFile(path)
+	local ok, res = pcall(function()
+		if readfile then return readfile(path) end
+		return MemoryFiles[path]
+	end)
+	if ok and isStr(res) then return res end
+	return MemoryFiles[path] or ""
 end
-local function WriteFile(p, d)
-	pcall(function() if writefile then writefile(p, d) end MemoryFiles[p] = d end)
-	MemoryFiles[p] = d
-end
-local function MakeFolder(p) pcall(function() if makefolder and isfolder then if not isfolder(p) then makefolder(p) end end end) end
-local function DeleteFile(p)
-	pcall(function() if delfile and isfile and isfile(p) then delfile(p) end end)
-	MemoryFiles[p] = nil
-end
-local function ListFiles(folder)
-	local out = {}
+
+local function SafeWriteFile(path, data)
 	pcall(function()
-		if listfiles and isfolder and isfolder(folder) then
-			for _, f in ipairs(listfiles(folder)) do table.insert(out, f) end
+		if writefile then writefile(path, data) end
+		MemoryFiles[path] = data
+	end)
+end
+
+local function SafeMakeFolder(folder)
+	pcall(function()
+		if makefolder and isfolder and not isfolder(folder) then
+			makefolder(folder)
+		end
+	end)
+end
+
+local function SerializeConfigValue(v)
+	if v == nil then return nil end
+	if typeof(v) == "Color3" then
+		return { __type = "Color3", R = math.floor(v.R * 255 + 0.5), G = math.floor(v.G * 255 + 0.5), B = math.floor(v.B * 255 + 0.5) }
+	elseif typeof(v) == "EnumItem" then
+		return { __type = "EnumItem", Name = v.Name }
+	elseif isTbl(v) then
+		local copy = {}
+		for k, val in pairs(v) do copy[toStr(k)] = SerializeConfigValue(val) end
+		return copy
+	else
+		return v
+	end
+end
+
+local function DeserializeConfigValue(v, compType)
+	if v == nil then return nil end
+	if isTbl(v) then
+		if v.__type == "Color3" then
+			return Color3.fromRGB(v.R or 255, v.G or 255, v.B or 255)
+		elseif v.__type == "EnumItem" and v.Name then
+			return v.Name
+		elseif compType == "Colorpicker" and #v == 3 then
+			return Color3.fromRGB(v[1] or 255, v[2] or 255, v[3] or 255)
+		elseif compType == "MultiDropdown" then
+			local list = {}
+			for _, item in pairs(v) do table.insert(list, toStr(item)) end
+			return list
 		else
-			for k in pairs(MemoryFiles) do table.insert(out, k) end
-		end
-	end)
-	return out
-end
-
-local GlobalComponents = {} -- saveKey -> component (ใช้ Collect/Apply)
-local ConfigFactory = nil
-do
-	local ok, mod = pcall(function()
-		if typeof(script) == "Instance" then
-			local f = script.Parent and script.Parent:FindFirstChild("Oxiasidian")
-			if f then
-				local m = f:FindFirstChild("Configuration")
-				if m and m:IsA("ModuleScript") then return require(m) end
-			end
-		end
-		return nil
-	end)
-	if ok and isTbl(mod) and isFn(mod.Create) then
-		ConfigFactory = mod
-	end
-end
-
-Library.Config = { _memory = {} }
-function Library.Config.CollectData()
-	local out = {}
-	for k, comp in pairs(GlobalComponents) do
-		local ok, v = pcall(function() if comp.GetValue then return comp.GetValue() end return nil end)
-		if ok and v ~= nil then
-			if typeof(v) == "Color3" then
-				out[k] = { math.floor(v.R*255), math.floor(v.G*255), math.floor(v.B*255) }
-			elseif typeof(v) == "EnumItem" then
-				out[k] = v.Name
-			else
-				out[k] = v
-			end
+			return v
 		end
 	end
-	return out
+	if compType == "Colorpicker" and isStr(v) and v:match("^#%x%x%x%x%x%x$") then
+		return Color3.fromRGB(tonumber(v:sub(2,3), 16), tonumber(v:sub(4,5), 16), tonumber(v:sub(6,7), 16))
+	end
+	return v
 end
-function Library.Config.ApplyData(data)
-	if not isTbl(data) then return false end
-	for k, v in pairs(data) do
-		local comp = GlobalComponents[toStr(k)]
-		if comp then
-			pcall(function()
-				if comp.Type == "Colorpicker" and isTbl(v) and #v == 3 then
-					v = Color3.fromRGB(v[1], v[2], v[3])
+
+local ConfigSystem = {
+	File = "OxiasidianConfig",
+	Data = {},              -- [key] = serializedValue
+	Registry = {},          -- [key] = component
+	_saveThread = nil,
+	_isSaving = false,
+}
+
+function ConfigSystem:Path()
+	return "OxiasidianUI/Config/" .. self.File .. ".json"
+end
+
+function ConfigSystem:Init(fileName)
+	fileName = toStr(fileName or "OxiasidianConfig")
+	if fileName == "" then fileName = "OxiasidianConfig" end
+	self.File = fileName:gsub("[^%w%-%_]", "_")
+	self.Data = {}
+	self:AutoLoad()
+end
+
+function ConfigSystem:AutoLoad()
+	local path = self:Path()
+	if not SafeIsFile(path) then
+		local legacyPath = "OxiasidianUI/" .. self.File .. ".json"
+		if SafeIsFile(legacyPath) then path = legacyPath end
+	end
+	if SafeIsFile(path) then
+		local content = SafeReadFile(path)
+		if isStr(content) and #content > 1 then
+			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
+			if ok and isTbl(dec) then
+				self.Data = dec
+				return true
+			end
+		end
+	end
+	self.Data = {}
+	return false
+end
+
+function ConfigSystem:Get(key, defaultVal, compType)
+	if not key then return defaultVal end
+	key = toStr(key)
+	if PlayerConfig and PlayerConfig:Has(key) then
+		return PlayerConfig:Get(key, defaultVal, compType)
+	end
+	local v = self.Data[key]
+	if v ~= nil then
+		return DeserializeConfigValue(v, compType)
+	end
+	return defaultVal
+end
+
+function ConfigSystem:Set(key, val)
+	if not key then return end
+	key = toStr(key)
+	if PlayerConfig and PlayerConfig:Has(key) then
+		PlayerConfig:Set(key, val)
+		return
+	end
+	self.Data[key] = SerializeConfigValue(val)
+	self:QueueSave()
+end
+
+-- Debounced disk write: บันทึกข้อมูลแบบ Debounce 0.35s ป้องกันแล็กตอนลาก Slider
+function ConfigSystem:QueueSave()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self._saveThread = task.delay(0.35, function()
+		self._saveThread = nil
+		self:Save()
+	end)
+end
+
+function ConfigSystem:Save()
+	if self._isSaving then return end
+	self._isSaving = true
+	pcall(function()
+		SafeMakeFolder("OxiasidianUI")
+		SafeMakeFolder("OxiasidianUI/Config")
+		local enc = HttpService:JSONEncode(self.Data)
+		SafeWriteFile(self:Path(), enc)
+	end)
+	self._isSaving = false
+end
+
+function ConfigSystem:Flush()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self:Save()
+end
+
+function ConfigSystem:Register(key, comp)
+	if not key or not comp then return end
+	self.Registry[toStr(key)] = comp
+end
+
+function ConfigSystem:Reset()
+	self.Data = {}
+	self:Flush()
+end
+
+function ConfigSystem:Load()
+	return self:AutoLoad()
+end
+
+Library.Config = ConfigSystem
+Library.ConfigSystem = ConfigSystem
+Library.UIConfig = ConfigSystem
+
+-- ================== 10.2 Player & Function Config System ==================
+local function DetectGameName(override)
+	if override and isStr(override) and override ~= "" then
+		return override:gsub("[^%w%-%_]", "_")
+	end
+	local name = nil
+	pcall(function()
+		local MarketplaceService = game:GetService("MarketplaceService")
+		local info = MarketplaceService:GetProductInfo(game.PlaceId)
+		if info and info.Name and #info.Name > 0 then
+			name = info.Name
+		end
+	end)
+	if not name or name == "" then
+		pcall(function()
+			name = tostring(game.Name or "")
+		end)
+	end
+	if not name or name == "" or name == "Game" then
+		name = tostring(game.GameId or game.PlaceId or "Game")
+	end
+	name = toStr(name):gsub("%s+", "_"):gsub("[^%w%-%_]", ""):gsub("_+", "_")
+	return (name ~= "" and name) or "UnknownGame"
+end
+
+local PlayerConfig = {
+	GameName = "UnknownGame",
+	Data = {},
+	BoundSettings = nil,
+	_saveThread = nil,
+	_isSaving = false,
+}
+
+function PlayerConfig:Path()
+	return "OxiasidianUI/Player_" .. self.GameName .. ".json"
+end
+
+function PlayerConfig:Init(gameName)
+	self.GameName = DetectGameName(gameName)
+	self.Data = {}
+	self:AutoLoad()
+end
+
+function PlayerConfig:AutoLoad()
+	local path = self:Path()
+	if SafeIsFile(path) then
+		local content = SafeReadFile(path)
+		if isStr(content) and #content > 1 then
+			local ok, dec = pcall(function() return HttpService:JSONDecode(content) end)
+			if ok and isTbl(dec) then
+				self.Data = dec
+				if isTbl(self.BoundSettings) then
+					for k, v in pairs(dec) do
+						pcall(function() self.BoundSettings[k] = DeserializeConfigValue(v) end)
+					end
 				end
-				if comp.SetValue then comp.SetValue(v) elseif comp.Update then comp.Update(v) end
-			end)
+				return true
+			end
 		end
 	end
-	return true
+	self.Data = {}
+	return false
 end
-local function CleanName(n)
-	n = toStr(n)
-	if n == "" then n = "default" end
-	return (n:gsub("[^%w%-%_]", "_"))
+
+function PlayerConfig:Has(key)
+	if not key then return false end
+	key = toStr(key)
+	if isTbl(self.BoundSettings) and self.BoundSettings[key] ~= nil then
+		return true
+	end
+	if self.Data and self.Data[key] ~= nil then
+		return true
+	end
+	if getgenv and isTbl(getgenv().Settings) and getgenv().Settings[key] ~= nil then
+		return true
+	end
+	if _G and isTbl(_G.Settings) and _G.Settings[key] ~= nil then
+		return true
+	end
+	return false
 end
--- รองรับทั้ง :SaveConfig("x") และ .SaveConfig("x")
-function Library.Config.SaveConfig(a, b)
-	local name = (a == Library.Config) and b or a
-	name = CleanName(name or "default")
-	local data = Library.Config.CollectData()
-	local ok, enc = pcall(function() return HttpService:JSONEncode(data) end)
-	if not ok then return false end
-	MakeFolder("OxiasidianUI")
-	WriteFile("OxiasidianUI/config_" .. name .. ".json", enc)
-	Library.Config._memory[name] = data
-	return true
-end
-function Library.Config.LoadConfig(a, b)
-	local name = (a == Library.Config) and b or a
-	name = CleanName(name or "default")
-	local path = "OxiasidianUI/config_" .. name .. ".json"
-	if IsFile(path) then
-		local c = ReadFile(path)
-		if isStr(c) and #c > 1 then
-			local ok, dec = pcall(function() return HttpService:JSONDecode(c) end)
-			if ok and isTbl(dec) then return Library.Config.ApplyData(dec) end
+
+function PlayerConfig:BindSettings(tbl)
+	if not isTbl(tbl) then return end
+	self.BoundSettings = tbl
+	for k, v in pairs(self.Data) do
+		pcall(function() tbl[k] = DeserializeConfigValue(v) end)
+	end
+	for k, v in pairs(tbl) do
+		if self.Data[toStr(k)] == nil then
+			self.Data[toStr(k)] = SerializeConfigValue(v)
 		end
 	end
-	if Library.Config._memory[name] then return Library.Config.ApplyData(Library.Config._memory[name]) end
-	return false
 end
-function Library.Config.DeleteConfig(a, b)
-	local name = (a == Library.Config) and b or a
-	name = CleanName(name or "default")
-	Library.Config._memory[name] = nil
-	DeleteFile("OxiasidianUI/config_" .. name .. ".json")
-	return true
-end
-function Library.Config.ListConfigs()
-	local out, seen = {}, {}
-	for k in pairs(Library.Config._memory) do seen[k] = true table.insert(out, k) end
-	for _, f in ipairs(ListFiles("OxiasidianUI")) do
-		local n = toStr(f):match("config_(.+)%.json$")
-		if n and not seen[n] then seen[n] = true table.insert(out, n) end
+
+function PlayerConfig:Get(key, defaultVal, compType)
+	if not key then return defaultVal end
+	key = toStr(key)
+	local v = self.Data[key]
+	if v ~= nil then
+		return DeserializeConfigValue(v, compType)
 	end
-	table.sort(out)
-	return out
+	if isTbl(self.BoundSettings) and self.BoundSettings[key] ~= nil then
+		return self.BoundSettings[key]
+	end
+	if getgenv and isTbl(getgenv().Settings) and getgenv().Settings[key] ~= nil then
+		return getgenv().Settings[key]
+	end
+	if _G and isTbl(_G.Settings) and _G.Settings[key] ~= nil then
+		return _G.Settings[key]
+	end
+	return defaultVal
 end
-function Library.Config.Export()
-	local ok, enc = pcall(function() return HttpService:JSONEncode(Library.Config.CollectData()) end)
-	if ok then return enc end
-	return "{}"
+
+function PlayerConfig:Set(key, val)
+	if not key then return end
+	key = toStr(key)
+	self.Data[key] = SerializeConfigValue(val)
+	if isTbl(self.BoundSettings) then
+		pcall(function() self.BoundSettings[key] = val end)
+	end
+	if getgenv and isTbl(getgenv().Settings) then
+		pcall(function() getgenv().Settings[key] = val end)
+	end
+	if _G and isTbl(_G.Settings) then
+		pcall(function() _G.Settings[key] = val end)
+	end
+	self:QueueSave()
 end
-function Library.Config.Import(a, b)
-	local s = (a == Library.Config) and b or a
-	if not isStr(s) then return false end
-	local ok, dec = pcall(function() return HttpService:JSONDecode(s) end)
-	if ok and isTbl(dec) then return Library.Config.ApplyData(dec) end
-	return false
+
+function PlayerConfig:QueueSave()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self._saveThread = task.delay(0.35, function()
+		self._saveThread = nil
+		self:Save()
+	end)
 end
-Library.SaveConfig = Library.Config.SaveConfig
-Library.LoadConfig = Library.Config.LoadConfig
-Library.DeleteConfig = Library.Config.DeleteConfig
-Library.ListConfigs = Library.Config.ListConfigs
+
+function PlayerConfig:Save()
+	if self._isSaving then return end
+	self._isSaving = true
+	pcall(function()
+		SafeMakeFolder("OxiasidianUI")
+		local enc = HttpService:JSONEncode(self.Data)
+		SafeWriteFile(self:Path(), enc)
+	end)
+	self._isSaving = false
+end
+
+function PlayerConfig:Flush()
+	if self._saveThread then
+		pcall(function() task.cancel(self._saveThread) end)
+		self._saveThread = nil
+	end
+	self:Save()
+end
+
+function PlayerConfig:Reset()
+	self.Data = {}
+	self:Flush()
+end
+
+function PlayerConfig:Load()
+	return self:AutoLoad()
+end
+
+PlayerConfig.GetFunction = PlayerConfig.Get
+PlayerConfig.SetFunction = PlayerConfig.Set
+PlayerConfig.GetState = PlayerConfig.Get
+PlayerConfig.SetState = PlayerConfig.Set
+
+Library.PlayerConfig = PlayerConfig
+Library.FunctionConfig = PlayerConfig
 
 -- ============================ 6. Notifications ===============================
 local NotifGui, NotifHolder, NotifById = nil, nil, {}
@@ -562,40 +777,24 @@ function Library:CreateWindow(...)
 	local title = toStr(cfg.Title or cfg.title or "Oxiasidian")
 	local subtitle = toStr(cfg.Subtitle or cfg.subtitle or "Blox Fruit")
 	local version = toStr(cfg.Version or cfg.version or "v.Premium")
-	local theme = ThemeSystem.Resolve(cfg.Theme or cfg.theme or "Purple")
+	-- ---- Init ConfigSystem (UI Config) ----
+	local saveFile = toStr(cfg.SaveFile or cfg.saveFile or cfg.savefile or "OxiasidianConfig")
+	ConfigSystem:Init(saveFile)
+	-- ---- Init PlayerConfig (Function Config: Settings) ----
+	local gameName = cfg.GameName or cfg.gameName or cfg.Game or cfg.game
+	PlayerConfig:Init(gameName)
+	local boundSettings = cfg.Settings or cfg.settings
+	if not boundSettings then
+		if getgenv and isTbl(getgenv().Settings) then boundSettings = getgenv().Settings
+		elseif isTbl(_G.Settings) then boundSettings = _G.Settings end
+	end
+	if boundSettings then
+		PlayerConfig:BindSettings(boundSettings)
+	end
+	local defaultTheme = cfg.Theme or cfg.theme or ConfigSystem:Get("UITheme", "Purple")
+	local theme = ThemeSystem.Resolve(defaultTheme)
 	local themeName = theme.Name
 	local onStopAll = cfg.OnStopAll or cfg.onStopAll
-	local saveFile = toStr(cfg.SaveFile or cfg.saveFile or "OxiasidianDefault")
-	if saveFile == "" then saveFile = "OxiasidianDefault" end
-	saveFile = saveFile:gsub("[^%w%-%_]", "_")
-
-	-- per-window save store (จำค่า toggle/dropdown/slider/textbox)
-	local store = { File = saveFile, Data = {} }
-	function store:Path() return "OxiasidianUI/" .. self.File .. ".json" end
-	function store:Load()
-		local ok, c = pcall(ReadFile, self:Path())
-		if ok and isStr(c) and #c > 1 then
-			local ok2, dec = pcall(function() return HttpService:JSONDecode(c) end)
-			if ok2 and isTbl(dec) then self.Data = dec end
-		end
-	end
-	function store:Get(k, d)
-		local v = self.Data[toStr(k)]
-		if v == nil then return d end
-		return v
-	end
-	function store:Set(k, v)
-		if k == nil then return end
-		self.Data[toStr(k)] = v
-		task.spawn(function()
-			task.wait(0.4)
-			pcall(function()
-				MakeFolder("OxiasidianUI")
-				WriteFile(self:Path(), HttpService:JSONEncode(self.Data))
-			end)
-		end)
-	end
-	store:Load()
 
 	local parent = GetUIParent()
 	pcall(function()
@@ -708,9 +907,13 @@ function Library:CreateWindow(...)
 	local Window = {
 		_gui = gui, _main = main, _navScroll = navScroll, _cfgWrap = cfgWrap,
 		_contentWrap = contentWrap, _float = floatBtn, _theme = theme, _themeName = themeName,
-		_store = store, _tabs = {}, _activeTab = nil, _open = true,
+		_tabs = {}, _activeTab = nil, _open = true,
 		_conns = {}, _children = {}, _themed = {}, _onStopAll = onStopAll,
 		Title = title, Subtitle = subtitle, Version = version,
+		Config = ConfigSystem,
+		UIConfig = ConfigSystem,
+		PlayerConfig = PlayerConfig,
+		FunctionConfig = PlayerConfig,
 	}
 	local function OnTheme(fn) table.insert(Window._themed, fn) end
 	Window._OnTheme = OnTheme
@@ -821,10 +1024,14 @@ function Library:CreateWindow(...)
 		if path == nil then path = Library.BootstrapFile end
 		path = toStr(path or "")
 		if path == "" then return false, "no bootstrap file" end
-		pcall(function() Library.Config.SaveConfig("_auto_reload") end)
+
 		pcall(function()
 			local w = Library._lastWindow
-			if w then w:Destroy() end
+			if w then
+				pcall(function() ConfigSystem:Flush() end)
+				pcall(function() PlayerConfig:Flush() end)
+				w:Destroy()
+			end
 		end)
 		task.wait(0.3)
 		pcall(function()
@@ -858,6 +1065,9 @@ function Library:CreateWindow(...)
 	-- ปุ่มลัดซ่อน/เปิด UI ย้ายไปเป็น keybind "Toggle UI Key" ใน Tab Settings
 	-- (ค่า default RightShift + จำค่าที่ตั้งไว้) จึงลบ listener ซ้ำตรงนี้ออกกัน toggle เบิ้ล
 
+	function Window:BindSettings(tbl)
+		PlayerConfig:BindSettings(tbl)
+	end
 	function Window:SetTheme(...)
 		local a = Pack(Window, ...)
 		local t = ThemeSystem.Resolve(a[1])
@@ -1066,19 +1276,13 @@ function Library:CreateWindow(...)
 				-- ---- Toggle / Checkbox (compact 32px) ----
 				local function BuildToggle(label, default, callback, locked, desc, saveKey, square)
 					label = toStr(label ~= nil and label or "Toggle")
-					local init = (default == true or default == 1)
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if sv ~= nil then
-							if type(sv) == "boolean" then init = sv
-							elseif isNum(sv) then init = (sv ~= 0)
-							elseif isStr(sv) then
-								local l = string.lower(sv)
-								if l == "true" or l == "1" then init = true end
-								if l == "false" or l == "0" then init = false end
-							end
-						end
+					-- auto-generate saveKey when not provided
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					local init = (default == true or default == 1)
+					-- restore from config if available
+					init = ConfigSystem:Get(saveKey, init, "Toggle")
 					local h = (desc and desc ~= "") and 38 or 32
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, h),
 						BackgroundColor3 = Window._theme.Surface, BackgroundTransparency = 1,
@@ -1146,10 +1350,7 @@ function Library:CreateWindow(...)
 						if isStr(v) then local l = string.lower(v) b = (l == "true" or l == "1") end
 						comp._value = b
 						Paint(true)
-						if comp._saveKey then
-							Window._store:Set(comp._saveKey, b)
-							GlobalComponents[comp._saveKey] = comp
-						end
+						ConfigSystem:Set(comp._saveKey, b)
 						if fire ~= false and isFn(comp._callback) then
 							task.spawn(function() pcall(comp._callback, b) end)
 						end
@@ -1164,7 +1365,6 @@ function Library:CreateWindow(...)
 						if comp._locked then return end
 						Apply(not comp._value, true)
 					end))
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -1326,10 +1526,13 @@ function Library:CreateWindow(...)
 					if def == nil then def = min end
 					def = clamp(def, min, max)
 					if step <= 0 then step = 1 end
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if isNum(sv) then def = clamp(sv, min, max) end
+					-- auto-generate saveKey when not provided
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					-- restore from config if available
+					local savedDef = ConfigSystem:Get(saveKey, def, "Slider")
+					if type(savedDef) == "number" then def = clamp(savedDef, min, max) end
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 46),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
@@ -1379,10 +1582,7 @@ function Library:CreateWindow(...)
 						v = clamp(v, min, max)
 						comp._value = v
 						Render()
-						if comp._saveKey then
-							Window._store:Set(comp._saveKey, v)
-							GlobalComponents[comp._saveKey] = comp
-						end
+						ConfigSystem:Set(comp._saveKey, v)
 						if fire ~= false and isFn(comp._callback) then
 							task.spawn(function() pcall(comp._callback, v) end)
 						end
@@ -1416,7 +1616,6 @@ function Library:CreateWindow(...)
 							dragging = false
 						end
 					end))
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -1441,11 +1640,12 @@ function Library:CreateWindow(...)
 						end
 					end
 					if max <= 0 then max = 100 end
-					val = clamp(val, 0, max)
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if isNum(sv) then val = clamp(sv, 0, max) end
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					local savedVal = ConfigSystem:Get(saveKey, nil, "Progress")
+					if type(savedVal) == "number" then val = clamp(savedVal, 0, max) end
+					val = clamp(val, 0, max)
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 54),
 						BackgroundTransparency = 1, LayoutOrder = NextOrder() }, box)
 					local dot = New("Frame", { Size = UDim2.new(0, 8, 0, 8),
@@ -1495,10 +1695,7 @@ function Library:CreateWindow(...)
 						if v == nil then return end
 						comp._value = clamp(v, 0, comp._max)
 						Render()
-						if comp._saveKey then
-							Window._store:Set(comp._saveKey, comp._value)
-							GlobalComponents[comp._saveKey] = comp
-						end
+						ConfigSystem:Set(comp._saveKey, comp._value)
 					end
 					comp.GetValue = function() return comp._value end
 					comp.Get = comp.GetValue
@@ -1512,7 +1709,7 @@ function Library:CreateWindow(...)
 					comp.SetStatus = function(a2, b2) bl.Text = toStr(b2 ~= nil and b2 or a2) end
 					comp.RefreshDesc = comp.SetStatus
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) end
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
+					ConfigSystem:Register(comp._saveKey, comp)
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -1558,13 +1755,18 @@ function Library:CreateWindow(...)
 					if not isStr(saveKey) then saveKey = nil end
 					label = toStr(label or "Dropdown")
 					local opts = NormList(choices)
+					-- auto-generate saveKey when not provided
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
+					end
+					local compType = multi and "MultiDropdown" or "Dropdown"
 					local init = multi and {} or NormDef(default, opts)
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if sv ~= nil then
-							if multi and isTbl(sv) then init = sv
-							elseif not multi and (isStr(sv) or isNum(sv)) then init = NormDef(sv, opts) end
-						end
+					-- restore from config if available
+					local savedVal = ConfigSystem:Get(saveKey, nil, compType)
+					if multi then
+						if isTbl(savedVal) then init = savedVal end
+					else
+						if savedVal ~= nil then init = NormDef(savedVal, opts) end
 					end
 					local rowH = (desc and desc ~= "") and 62 or 50
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, rowH),
@@ -1701,20 +1903,14 @@ function Library:CreateWindow(...)
 										for k in pairs(comp._multi) do table.insert(arr, k) end
 										table.sort(arr)
 										PaintSel()
-										if comp._saveKey then
-											Window._store:Set(comp._saveKey, arr)
-											GlobalComponents[comp._saveKey] = comp
-										end
+										ConfigSystem:Set(comp._saveKey, arr)
 										if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, arr) end) end
 										RefreshPool(search.Text)
 									else
 										comp._value = opt
 										PaintSel()
+										ConfigSystem:Set(comp._saveKey, opt)
 										Close()
-										if comp._saveKey then
-											Window._store:Set(comp._saveKey, opt)
-											GlobalComponents[comp._saveKey] = comp
-										end
 										if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, opt) end) end
 									end
 								end))
@@ -1756,19 +1952,10 @@ function Library:CreateWindow(...)
 							if isTbl(v) then for _, x in ipairs(v) do comp._multi[toStr(x)] = true end
 							elseif v ~= nil then comp._multi[toStr(v)] = true end
 							PaintSel()
-							if comp._saveKey then
-								local arr = comp.GetValue()
-								Window._store:Set(comp._saveKey, arr)
-								GlobalComponents[comp._saveKey] = comp
-							end
 							if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp.GetValue()) end) end
 						else
 							comp._value = NormDef(v, comp._options)
 							PaintSel()
-							if comp._saveKey then
-								Window._store:Set(comp._saveKey, comp._value)
-								GlobalComponents[comp._saveKey] = comp
-							end
 							if isFn(comp._callback) then task.spawn(function() pcall(comp._callback, comp._value) end) end
 						end
 					end
@@ -1810,7 +1997,6 @@ function Library:CreateWindow(...)
 						if comp._open then RefreshPool(search.Text) end
 					end
 					comp.Destroy = function() DisconnectAll(comp) pcall(function() row:Destroy() end) pcall(function() popup:Destroy() end) end
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -1845,10 +2031,11 @@ function Library:CreateWindow(...)
 							elseif isStr(v) and def == "" then def = v end
 						end
 					end
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if sv ~= nil then def = toStr(sv) end
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					local savedDef = ConfigSystem:Get(saveKey, nil, "Textbox")
+					if savedDef ~= nil then def = toStr(savedDef) end
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 50),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
@@ -1876,10 +2063,7 @@ function Library:CreateWindow(...)
 					local function Apply(v, fire)
 						comp._value = toStr(v or "")
 						if tb.Text ~= comp._value then tb.Text = comp._value end
-						if comp._saveKey then
-							Window._store:Set(comp._saveKey, comp._value)
-							GlobalComponents[comp._saveKey] = comp
-						end
+						ConfigSystem:Set(comp._saveKey, comp._value)
 						if fire ~= false and isFn(comp._callback) then
 							task.spawn(function() pcall(comp._callback, comp._value) end)
 						end
@@ -1892,7 +2076,7 @@ function Library:CreateWindow(...)
 					Track(comp, tb.FocusLost:Connect(function(enter)
 						if enter then Apply(tb.Text, true) else Apply(tb.Text, true) end
 					end))
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
+					ConfigSystem:Register(comp._saveKey, comp)
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -1968,10 +2152,11 @@ function Library:CreateWindow(...)
 						elseif isStr(v) and #v <= 12 and def == "F" then def = v
 						elseif isStr(v) and saveKey == nil and not v:find(" ") then saveKey = v end
 					end
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if isStr(sv) and sv ~= "" then def = sv end
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					local savedKB = ConfigSystem:Get(saveKey, nil, "Keybind")
+					if isStr(savedKB) and savedKB ~= "" then def = savedKB end
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 32),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
@@ -1991,10 +2176,7 @@ function Library:CreateWindow(...)
 					local function SetKey(name, fire)
 						comp._value = toStr(name)
 						keyBtn.Text = "[" .. comp._value .. "]"
-						if comp._saveKey then
-							Window._store:Set(comp._saveKey, comp._value)
-							GlobalComponents[comp._saveKey] = comp
-						end
+						ConfigSystem:Set(comp._saveKey, comp._value)
 						if fire and isFn(comp._callback) then
 							task.spawn(function() pcall(comp._callback, comp._value) end)
 						end
@@ -2021,7 +2203,7 @@ function Library:CreateWindow(...)
 							end
 						end
 					end))
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
+					ConfigSystem:Register(comp._saveKey, comp)
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -2043,10 +2225,11 @@ function Library:CreateWindow(...)
 						elseif type(v) == "boolean" and v == true then locked = true
 						elseif isStr(v) and saveKey == nil and not v:find(" ") then saveKey = v end
 					end
-					if saveKey then
-						local sv = Window._store:Get(saveKey, nil)
-						if isTbl(sv) and #sv == 3 then def = Color3.fromRGB(sv[1], sv[2], sv[3]) end
+					if not saveKey or saveKey == "" then
+						saveKey = (Menu.Name or "General") .. "_" .. label:gsub("[^%w%-%_]", "")
 					end
+					local savedCP = ConfigSystem:Get(saveKey, nil, "Colorpicker")
+					if typeof(savedCP) == "Color3" then def = savedCP end
 					local row = New("Frame", { Size = UDim2.new(1, 0, 0, 32),
 						BackgroundColor3 = Window._theme.Surface, BorderSizePixel = 0, LayoutOrder = NextOrder() }, box)
 					Corner(row, 5)
@@ -2078,11 +2261,7 @@ function Library:CreateWindow(...)
 					local c = CurColor()
 					comp._value = c
 					prev.BackgroundColor3 = c
-					if comp._saveKey then
-						Window._store:Set(comp._saveKey,
-							{ math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5) })
-						GlobalComponents[comp._saveKey] = comp
-					end
+					ConfigSystem:Set(comp._saveKey, c)
 					if fire ~= false and isFn(comp._callback) then
 						task.spawn(function() pcall(comp._callback, c) end)
 					end
@@ -2268,7 +2447,7 @@ function Library:CreateWindow(...)
 					row.Size = UDim2.new(1, 0, 0, 32 + 4 + PANEL_H)
 					comp._open = true
 				end))
-					if comp._saveKey then GlobalComponents[comp._saveKey] = comp end
+					ConfigSystem:Register(comp._saveKey, comp)
 					AddChild(Menu, comp)
 					AddChild(Window, comp)
 					return comp
@@ -2301,8 +2480,29 @@ function Library:CreateWindow(...)
 		local m1 = cfgTab:addSection():addMenu("Appearance")
 		local thDD = m1:addDropdown("Theme", Window._themeName,
 			ThemeSystem.List and ThemeSystem.List() or { "Purple", "Midnight", "Dark", "Crimson" },
-			function(n) Window:SetTheme(n) end)
+			function(n)
+				Window:SetTheme(n)
+				ConfigSystem:Set("UITheme", n)
+			end, nil, nil, "UITheme")
 		thDD.Type = "ThemePicker"
+
+		local cfgMenu = cfgTab:addSection():addMenu("Config Manager")
+		cfgMenu:addLabel("UI Config", ConfigSystem:Path())
+		cfgMenu:addLabel("Function Config", PlayerConfig:Path())
+		cfgMenu:addButton("Save All Configs Now", function()
+			ConfigSystem:Flush()
+			PlayerConfig:Flush()
+			Window:Notify({ Title = "Config", Description = "Saved all configs successfully" })
+		end)
+		cfgMenu:addButton("Reset UI Config", function()
+			ConfigSystem:Reset()
+			Window:Notify({ Title = "Config", Description = "UI Config has been reset" })
+		end)
+		cfgMenu:addButton("Reset Function Config", function()
+			PlayerConfig:Reset()
+			Window:Notify({ Title = "Config", Description = "Function Config has been reset" })
+		end)
+
 		local hk = cfgTab:addSection():addMenu("Hotkey")
 		hk:addKeybind("Toggle UI Key", "RightShift", function()
 			Window:Toggle()
@@ -2313,49 +2513,11 @@ function Library:CreateWindow(...)
 				Window:Notify({ Title = "Oxiasidian", Description = "All functions stopped" })
 			end
 		end)
-		local m2 = cfgTab:addSection():addMenu("Configuration")
-		local nameBox = m2:addTextbox("Config name", function() end, nil, nil, store.File)
-		local listDD = m2:addDropdown("Saved configs", "", Library.Config.ListConfigs(), function() end)
-		local status = m2:addLabel("Status", "Ready")
-		local imp = m2:addTextbox("Import / export JSON", function() end, nil, nil, "")
-		m2:addButton("Save config", function()
-			local n = nameBox.GetValue()
-			if n == "" then n = store.File end
-			if Library.Config.SaveConfig(n) then
-				status.RefreshDesc("Saved: " .. n)
-				listDD.Refresh(Library.Config.ListConfigs())
-				Window._store:Load()
-			else status.RefreshDesc("Save failed") end
-		end)
-		m2:addButton("Load selected config", function()
-			local n = listDD.GetValue()
-			if n == nil or n == "" then n = nameBox.GetValue() end
-			if Library.Config.LoadConfig(n) then status.RefreshDesc("Loaded: " .. toStr(n))
-			else status.RefreshDesc("Load failed: " .. toStr(n)) end
-		end)
-		m2:addButton("Delete config", function()
-			local n = listDD.GetValue()
-			if n == nil or n == "" then n = nameBox.GetValue() end
-			Library.Config.DeleteConfig(n)
-			listDD.Refresh(Library.Config.ListConfigs())
-			status.RefreshDesc("Deleted: " .. toStr(n))
-		end)
-		m2:addButton("Export current settings", function()
-			imp.SetValue(Library.Config.Export())
-			status.RefreshDesc("Exported (" .. #imp.GetValue() .. " bytes)")
-		end)
-		m2:addButton("Import settings from field", function()
-			if Library.Config.Import(imp.GetValue()) then status.RefreshDesc("Imported OK")
-			else status.RefreshDesc("Import failed") end
-		end)
-		m2:addButton("Re-open window", function()
-			-- ลอง full reload ก่อน (จุดไหนแก้โค้ดไว้ถูกโหลดใหม่ทั้งหมด)
+		hk:addButton("Re-open window", function()
 			Window:Notify({ Title = "Reload", Description = "กำลังโหลด UI ใหม่ทั้งหมด..." })
 			local ok, err = Library.HardReload()
 			if ok then return end
-			-- fallback: soft refresh เมื่อ reload ไม่ได้ (ไม่มีไฟล์ตั้งต้น)
 			pcall(function()
-				Library.Config.ApplyData(Library.Config.CollectData())
 				Window:SetTheme(Window._themeName)
 			end)
 			Window:Notify({ Title = "Oxiasidian",
@@ -2374,6 +2536,9 @@ function Library:CreateWindow(...)
 	function Window:Destroy(...)
 		local stop = self._onStopAll
 		if isFn(stop) then pcall(stop) end
+		-- flush pending config saves before GUI is gone
+		pcall(function() ConfigSystem:Flush() end)
+		pcall(function() PlayerConfig:Flush() end)
 		for _, t in ipairs(self._tabs) do DisconnectAll(t) end
 		DisconnectAll(self)
 		pcall(function() self._gui:Destroy() end)
