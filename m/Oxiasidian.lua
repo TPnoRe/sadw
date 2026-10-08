@@ -35,7 +35,7 @@
 -- ==============================================================================
 
 local Library = {}
-Library.Version = "3.2.2"
+Library.Version = "3.2.3"
 Library.Name = "GUI"
 
 -- ============================ 1. Library Core ================================
@@ -749,7 +749,7 @@ Library.PlayerConfig = PlayerConfig
 Library.FunctionConfig = PlayerConfig
 
 -- ============================ 6. Notifications ===============================
-local NotifGui, NotifHolder, NotifById = nil, nil, {}
+local NotifGui, NotifHolder, NotifById, CardTokens = nil, nil, {}, {}
 local function EnsureNotif()
 	if NotifGui and NotifGui.Parent then return NotifGui end
 	local parent = GetUIParent()
@@ -779,29 +779,49 @@ end
 local function ShowNotif(parsed, theme, kind)
 	EnsureNotif()
 	theme = theme or ThemeSystem.Resolve("Purple")
+
 	local function StartTimer(notifCard, totalTime, token)
 		local progFill = notifCard:FindFirstChild("ProgFill", true)
 		local tLbl = notifCard:FindFirstChild("TimerLabel", true)
-		if progFill then
-			progFill.Size = UDim2.new(1, 0, 1, 0)
-			Tween(progFill, { Size = UDim2.new(0, 0, 1, 0) }, TweenInfo.new(totalTime, Enum.EasingStyle.Linear))
-		end
+
 		task.spawn(function()
 			local startTime = tick()
 			local endTime = startTime + totalTime
-			while notifCard and notifCard.Parent and notifCard._timerToken == token do
-				local remaining = endTime - tick()
-				if remaining <= 0 then break end
+
+			while notifCard and notifCard.Parent and CardTokens[notifCard] == token do
+				local now = tick()
+				local remaining = math.max(0, endTime - now)
+				local alpha = math.clamp(remaining / totalTime, 0, 1)
+
+				if progFill and progFill.Parent then
+					progFill.Size = UDim2.new(alpha, 0, 1, 0)
+				end
 				if tLbl and tLbl.Parent then
 					tLbl.Text = string.format("%.1fs", remaining)
 				end
-				task.wait(0.1)
+
+				if remaining <= 0 then
+					break
+				end
+
+				task.wait(0.03)
 			end
-			if notifCard and notifCard.Parent and notifCard._timerToken == token then
-				if tLbl and tLbl.Parent then tLbl.Text = "0.0s" end
+
+			if notifCard and notifCard.Parent and CardTokens[notifCard] == token then
+				if progFill and progFill.Parent then
+					progFill.Size = UDim2.new(0, 0, 1, 0)
+				end
+				if tLbl and tLbl.Parent then
+					tLbl.Text = "0.0s"
+				end
 				Tween(notifCard, { BackgroundTransparency = 1 })
-				task.delay(0.16, function() pcall(function() notifCard:Destroy() end) end)
-				if parsed.Id and NotifById[parsed.Id] == notifCard then NotifById[parsed.Id] = nil end
+				task.delay(0.16, function()
+					pcall(function() notifCard:Destroy() end)
+					CardTokens[notifCard] = nil
+				end)
+				if parsed.Id and NotifById[parsed.Id] == notifCard then
+					NotifById[parsed.Id] = nil
+				end
 			end
 		end)
 	end
@@ -813,8 +833,8 @@ local function ShowNotif(parsed, theme, kind)
 			local dLbl = existing:FindFirstChild("DescLabel", true)
 			if tLbl then tLbl.Text = parsed.Title end
 			if dLbl then dLbl.Text = parsed.Description end
-			existing._timerToken = (existing._timerToken or 0) + 1
-			StartTimer(existing, parsed.Time, existing._timerToken)
+			CardTokens[existing] = (CardTokens[existing] or 0) + 1
+			StartTimer(existing, parsed.Time, CardTokens[existing])
 			return existing
 		end
 		NotifById[parsed.Id] = nil
@@ -880,6 +900,7 @@ local function ShowNotif(parsed, theme, kind)
 			Pad(btn, 0, 6, 0, 6)
 			btn.MouseButton1Click:Connect(function()
 				pcall(function() if isFn(cb) then cb() end end)
+				CardTokens[card] = -1
 				pcall(function() card:Destroy() end)
 				if parsed.Id then NotifById[parsed.Id] = nil end
 			end)
@@ -894,7 +915,7 @@ local function ShowNotif(parsed, theme, kind)
 		BackgroundColor3 = accent, BorderSizePixel = 0 }, progTrack)
 	Corner(progFill, 1)
 
-	card._timerToken = 1
+	CardTokens[card] = 1
 	if parsed.Id and parsed.Id ~= "" then NotifById[parsed.Id] = card end
 	StartTimer(card, parsed.Time, 1)
 	return card
