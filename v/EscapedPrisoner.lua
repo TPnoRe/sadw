@@ -537,9 +537,8 @@ function EscapedPrisoner.Run(env)
 
 			-- [ป้องกันลูปวนเมื่อม็อบยังไม่เกิดใหม่]
 			-- หากบินครบทั้ง 3 จุดในรอบแรกแล้วไม่เจอม็อบเลยแม้แต่ตัวเดียว (คนอื่นเพิ่งตีไปหรือยังไม่เกิด)
-			-- ให้หยุดวนลูปทันที ไม่บินไปหา Jail Keeper และตั้ง Cooldown หน่วงเวลา 3 วินาที เพื่อกลับไปฟาร์มปกติ
+			-- ให้หยุดวนลูปทันที ไม่บินไปหา Jail Keeper และส่งคืนค่า false เพื่อให้ตัวละครสลับกลับไปฟาร์มมอนสเตอร์ตามเลเวลปกติทันที
 			if totalMobsEncountered == 0 then
-				EscapedPrisoner.NextCheckTick = tick() + 3
 				EscapedPrisoner.QuestCompleted = false
 				return false
 			end
