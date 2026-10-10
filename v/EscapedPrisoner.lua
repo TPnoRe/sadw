@@ -408,84 +408,104 @@ function EscapedPrisoner.Run(env)
 	settingsObj.BringMonster = false
 
 	local ok, err = pcall(function()
-		-- ทำวนให้ครบทั้ง 3 จุด
-		for i, point in ipairs(EscapedPrisoner.Points) do
+		-- [ลูปตรวจเช็ค]: วนกำจัด EscapedPrisoner ให้หมดก่อนไปหา NPC
+		local maxRounds = 5
+		local currentRound = 0
+
+		while currentRound < maxRounds do
+			currentRound += 1
 			if settingsObj.AutoFarm == false then
 				break
 			end
 
-			-- [2. Tween ไปจุดของ escapedPoints]
-			local t0 = tick()
-			local targetCF = CFrame.new(point)
-			while tick() - t0 < 15 do
+			-- ทำวนให้ครบทั้ง 3 จุด
+			for i, point in ipairs(EscapedPrisoner.Points) do
 				if settingsObj.AutoFarm == false then
 					break
 				end
 
-				local char = localPlayer and localPlayer.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
-				if hrp and (hrp.Position - point).Magnitude <= 18 then
-					break
-				end
+				-- [2. Tween ไปจุดของ escapedPoints]
+				local t0 = tick()
+				local targetCF = CFrame.new(point)
+				while tick() - t0 < 15 do
+					if settingsObj.AutoFarm == false then
+						break
+					end
 
-				if tweenMgr and tweenMgr.topos then
-					tweenMgr:topos(targetCF, true)
-				end
-				task.wait(0.25)
-			end
+					local char = localPlayer and localPlayer.Character
+					local hrp = char and char:FindFirstChild("HumanoidRootPart")
+					if hrp and (hrp.Position - point).Magnitude <= 18 then
+						break
+					end
 
-			-- [3. รัน AutoAdvanceDialogue() จากไฟล์หลักให้เสร็จ]
-			if advanceDialogue then
-				local diagStart = tick()
-				while tick() - diagStart < 3.5 do
-					local clicked = advanceDialogue()
-					if not clicked then break end
+					if tweenMgr and tweenMgr.topos then
+						tweenMgr:topos(targetCF, true)
+					end
 					task.wait(0.25)
 				end
-			end
-			task.wait(0.2)
 
-			-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
-			local killStart = tick()
-			while tick() - killStart < 35 do
-				if settingsObj.AutoFarm == false then
-					break
-				end
-
-				local target = EscapedPrisoner.FindTargetNear(point, 180)
-				if not target then
-					-- มอนตายแล้ว หรือไม่มีมอนที่จุดนี้
-					break
-				end
-
-				local hum = target:FindFirstChildOfClass("Humanoid")
-				if not hum or hum.Health <= 0 then
-					break
-				end
-
-				-- โจมตีมอนสเตอร์ (ไม่ Bring Mob)
-				if subFunc and subFunc.Attack then
-					subFunc:Attack(target, false)
-				elseif utils and utils.GetFarmCFrame then
-					local root = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
-					if root and tweenMgr and tweenMgr.topos then
-						tweenMgr:topos(utils:GetFarmCFrame(root), true)
+				-- [3. รัน AutoAdvanceDialogue() จากไฟล์หลักให้เสร็จ]
+				if advanceDialogue then
+					local diagStart = tick()
+					while tick() - diagStart < 3.5 do
+						local clicked = advanceDialogue()
+						if not clicked then break end
+						task.wait(0.25)
 					end
 				end
+				task.wait(0.2)
 
-				task.wait(0.15)
+				-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
+				local killStart = tick()
+				while tick() - killStart < 35 do
+					if settingsObj.AutoFarm == false then
+						break
+					end
+
+					local target = EscapedPrisoner.FindTargetNear(point, 180)
+					if not target then
+						-- มอนตายแล้ว หรือไม่มีมอนที่จุดนี้
+						break
+					end
+
+					local hum = target:FindFirstChildOfClass("Humanoid")
+					if not hum or hum.Health <= 0 then
+						break
+					end
+
+					-- โจมตีมอนสเตอร์ (ไม่ Bring Mob)
+					if subFunc and subFunc.Attack then
+						subFunc:Attack(target, false)
+					elseif utils and utils.GetFarmCFrame then
+						local root = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+						if root and tweenMgr and tweenMgr.topos then
+							tweenMgr:topos(utils:GetFarmCFrame(root), true)
+						end
+					end
+
+					task.wait(0.15)
+				end
+
+				-- เคลียร์ Hitbox เมื่อกำจัดมอนสเตอร์จุดนี้เสร็จสิ้น
+				if utils and utils.ClearHitbox then
+					utils:ClearHitbox()
+				end
+
+				task.wait(0.3)
 			end
 
-			-- เคลียร์ Hitbox เมื่อกำจัดมอนสเตอร์จุดนี้เสร็จสิ้น
-			if utils and utils.ClearHitbox then
-				utils:ClearHitbox()
+			-- เช็คก่อนไปหา NPC ว่ายังมี EscapedPrisoner อยู่ไหม
+			local remaining = EscapedPrisoner.FindTargets()
+			if #remaining == 0 then
+				break -- ไม่มี EscapedPrisoner เหลืออยู่แล้ว พร้อมไปหา NPC
+			else
+				task.wait(0.5) -- ยังมีเหลืออยู่ ให้วนทำตามขั้นตอนเดิมซ้ำอีกรอบ
 			end
-
-			task.wait(0.3)
 		end
 
-		-- [5. หลังเควสต์นี้เสร็จ: Tween ไปหา NPC Jail Keeper แล้วคลิกปุ่ม "โต้ตอบ" / "Interact"]
-		if settingsObj.AutoFarm ~= false then
+		-- [5. ก่อนไปหา NPC: ยืนยันว่าไม่มี EscapedPrisoner เหลืออยู่แล้ว จึง Tween ไปหา NPC Jail Keeper แล้วกดปุ่ม "โต้ตอบ" / "Interact"]
+		local finalRemaining = EscapedPrisoner.FindTargets()
+		if #finalRemaining == 0 and settingsObj.AutoFarm ~= false then
 			EscapedPrisoner.InteractWithJailKeeper(env)
 		end
 	end)
