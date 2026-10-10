@@ -173,7 +173,7 @@ function EscapedPrisoner.Run(env)
 	local tweenMgr = env.tweenManager or _G.tweenManager
 	local settingsObj = env.Settings or _G.Settings or {}
 	local subFunc = env.subFunction or (OxiasidianAPI and OxiasidianAPI.SubFunction)
-	local utils = env.utilities or _G.utilities
+	local advanceDialogue = env.autoAdvanceDialogue or (utils and utils.AutoAdvanceDialogue and function() return utils:AutoAdvanceDialogue() end) or _G.autoAdvanceDialogue or EscapedPrisoner.AutoAdvanceDialogue
 
 	EscapedPrisoner.Busy = true
 
@@ -208,8 +208,15 @@ function EscapedPrisoner.Run(env)
 				task.wait(0.25)
 			end
 
-			-- [3. รัน AutoAdvanceDialogue() ให้เสร็จ]
-			EscapedPrisoner.AutoAdvanceDialogue(3)
+			-- [3. รัน AutoAdvanceDialogue() จากไฟล์หลักให้เสร็จ]
+			if advanceDialogue then
+				local diagStart = tick()
+				while tick() - diagStart < 3.5 do
+					local clicked = advanceDialogue()
+					if not clicked then break end
+					task.wait(0.25)
+				end
+			end
 			task.wait(0.2)
 
 			-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
