@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- [STANDALONE TEST SCRIPT: BuyBlackLeg & NPC Streaming Diagnostics]
 -- วัตถุประสงค์: ทดสอบการซื้อหมัด Black Leg แยกเดี่ยว ไม่พึ่งพา Main Script ใดๆ
--- ตรวจสอบ: ปัญหา NPC ไม่โหลดจากระยะไกล (StreamingEnabled), การยิง Remote, และการบินไปซื้อ
+-- ตรวจสอบ: ปัญหา NPC ไม่โหลดจากระยะไกล (StreamingEnabled), การยิง Remote, และการวาป/บินไปซื้อ
 -- ==============================================================================
 
 local Players = game:GetService("Players")
@@ -106,8 +106,8 @@ end
 -- หน้าต่างหลัก (Draggable)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 480)
-mainFrame.Position = UDim2.new(0.5, -210, 0.5, -240)
+mainFrame.Size = UDim2.new(0, 430, 0, 520)
+mainFrame.Position = UDim2.new(0.5, -215, 0.5, -260)
 mainFrame.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -140,8 +140,8 @@ titleCorner.Parent = titleLabel
 
 -- กล่องสถานะ (Info Box)
 local infoBox = Instance.new("Frame")
-infoBox.Position = UDim2.new(0, 12, 0, 48)
-infoBox.Size = UDim2.new(1, -24, 0, 110)
+infoBox.Position = UDim2.new(0, 12, 0, 46)
+infoBox.Size = UDim2.new(1, -24, 0, 105)
 infoBox.BackgroundColor3 = Color3.fromRGB(18, 20, 25)
 infoBox.BorderSizePixel = 0
 infoBox.Parent = mainFrame
@@ -151,8 +151,8 @@ infoCorner.CornerRadius = UDim.new(0, 8)
 infoCorner.Parent = infoBox
 
 local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(1, -16, 1, -10)
-infoLabel.Position = UDim2.new(0, 8, 0, 5)
+infoLabel.Size = UDim2.new(1, -16, 1, -8)
+infoLabel.Position = UDim2.new(0, 8, 0, 4)
 infoLabel.BackgroundTransparency = 1
 infoLabel.Font = Enum.Font.Gotham
 infoLabel.TextSize = 12
@@ -164,8 +164,8 @@ infoLabel.Parent = infoBox
 
 -- กล่องข้อความ Logs
 local logBox = Instance.new("ScrollingFrame")
-logBox.Position = UDim2.new(0, 12, 0, 168)
-logBox.Size = UDim2.new(1, -24, 0, 170)
+logBox.Position = UDim2.new(0, 12, 0, 158)
+logBox.Size = UDim2.new(1, -24, 0, 165)
 logBox.BackgroundColor3 = Color3.fromRGB(14, 15, 20)
 logBox.BorderSizePixel = 0
 logBox.ScrollBarThickness = 5
@@ -268,7 +268,7 @@ local function inspectStreaming()
 		if npc then
 			addLog("✅ พบ NPC หลัง RequestStreamAroundAsync!")
 		else
-			addLog("❌ ยังคงไม่พบ NPC (อาจต้องบินเข้าไปใกล้ๆ)")
+			addLog("❌ ยังคงไม่พบ NPC (อาจต้องบิน/วาปเข้าไปใกล้ๆ)")
 		end
 		return
 	end
@@ -357,7 +357,84 @@ local function stopNoclip()
 	end
 end
 
--- ฟังก์ชัน Tween บินไปหา NPC แล้วยิงคำสั่งซื้อ
+-- ==============================================================================
+-- [ACTION: วาปไปหา NPC ทันที (Instant CFrame Warp) ตามที่ขอ]
+-- ==============================================================================
+local function testInstantWarpAndBuy()
+	local char = localPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		addLog("❌ ไม่พบ HumanoidRootPart ของผู้เล่น")
+		return
+	end
+
+	originalCFrame = hrp.CFrame
+	local targetCF = getNPCCFrame()
+	local destination = targetCF * CFrame.new(0, 0, -3.5)
+	local dist = (hrp.Position - destination.Position).Magnitude
+
+	addLog(string.format("⚡ เริ่มต้นวาปทันที (Instant Warp) ไปหา Dark Step Teacher (%d studs)...", math.floor(dist)))
+
+	-- เคลียร์แรงเฉื่อยและเซตพิกัดทันที
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = destination
+
+	-- เรียก RequestStreamAroundAsync เพื่อบังคับให้โหลดแมพและ NPC ทันที
+	pcall(function()
+		Workspace:RequestStreamAroundAsync(destination.Position)
+	end)
+
+	addLog("⏳ วาปถึงแล้ว! กำลังรอ Server & Client Streaming ซิงค์ข้อมูล (0.5s)...")
+	task.wait(0.5)
+
+	-- ตรวจสอบชิ้นส่วน NPC ณ จุดเป้าหมาย
+	local npc = getDarkStepTeacher()
+	local partsCount = 0
+	if npc then
+		for _, child in ipairs(npc:GetDescendants()) do
+			if child:IsA("BasePart") then
+				partsCount = partsCount + 1
+			end
+		end
+		addLog(string.format("👀 ตรวจสอบชิ้นส่วน NPC หลังวาป: %d ชิ้นส่วน", partsCount))
+	else
+		addLog("⚠️ ยังไม่พบโมเดล NPC หลังวาป")
+	end
+
+	-- ยิงคำสั่งซื้อหมัดที่หน้า NPC
+	addLog("🛒 กำลังยิง Remote 'BuyBlackLeg' ที่หน้า NPC...")
+	local commF = getCommF()
+	if not commF then
+		addLog("❌ ไม่พบ Remote CommF_!")
+		return
+	end
+
+	local startT = tick()
+	local ok, result = pcall(function()
+		return commF:InvokeServer("BuyBlackLeg")
+	end)
+	local elapsed = tick() - startT
+
+	if not ok then
+		addLog("❌ เกิด Error ขณะ InvokeServer: " .. tostring(result))
+		return
+	end
+
+	addLog(string.format("📩 ผลลัพธ์จาก Server (ใช้เวลา %.2fs): %s", elapsed, tostring(result)))
+
+	task.wait(0.3)
+	local owned, ownedName = checkBlackLegOwned()
+	if owned then
+		addLog("🎉 สำเร็จ! ผู้เล่นได้รับหมัด " .. tostring(ownedName) .. " เรียบร้อยแล้ว!")
+	else
+		addLog("⚠️ ยังไม่ได้รับหมัด: ตรวจสอบเงิน ($150k) หรือการตอบสนองของเซิร์ฟเวอร์")
+	end
+end
+
+-- ==============================================================================
+-- [ACTION: บินไปหา NPC แบบ Tween (Safe Flight)]
+-- ==============================================================================
 local function testTweenAndBuy()
 	if isTweening then
 		addLog("⚠️ กำลังเดินทางอยู่แล้ว...")
@@ -380,7 +457,6 @@ local function testTweenAndBuy()
 	isTweening = true
 	startNoclip()
 
-	-- ความเร็วประมาณ 300 studs/s
 	local speed = 300
 	local duration = math.clamp(dist / speed, 0.5, 30)
 
@@ -393,7 +469,7 @@ local function testTweenAndBuy()
 		isTweening = false
 		currentTween = nil
 
-		addLog("🛬 เดินทางถึงพิกัดหน้า NPC แล้ว!")
+		addLog("🛬 บินถึงพิกัดหน้า NPC แล้ว!")
 		task.wait(0.5)
 
 		-- ตรวจสอบ Streaming อีกครั้งเมื่อถึงที่หมาย
@@ -406,7 +482,9 @@ local function testTweenAndBuy()
 	end)
 end
 
--- ฟังก์ชันบินกลับจุดเดิม
+-- ==============================================================================
+-- [ACTION: วาปกลับจุดเริ่มต้นทันที (Instant Return)]
+-- ==============================================================================
 local function returnToOrigin()
 	if not originalCFrame then
 		addLog("⚠️ ไม่มีพิกัดเดิมที่บันทึกไว้")
@@ -417,26 +495,20 @@ local function returnToOrigin()
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	addLog("🔙 กำลังวาป/บินกลับจุดเดิม...")
-	startNoclip()
-	local dist = (hrp.Position - originalCFrame.Position).Magnitude
-	local duration = math.clamp(dist / 350, 0.5, 20)
-	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-	local tw = TweenService:Create(hrp, tweenInfo, { CFrame = originalCFrame })
-	tw:Play()
-	tw.Completed:Connect(function()
-		stopNoclip()
-		addLog("✅ กลับถึงจุดเดิมเรียบร้อยแล้ว!")
-	end)
+	addLog("🔙 วาปกลับจุดเริ่มต้นทันที (Instant Return)...")
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = originalCFrame
+	addLog("✅ กลับถึงจุดเดิมเรียบร้อยแล้ว!")
 end
 
 -- ==============================================================================
--- [BUTTONS UI: สร้างปุ่มกด 4 ปุ่ม]
+-- [BUTTONS UI: สร้างปุ่มกด 5 ปุ่ม]
 -- ==============================================================================
 local function createButton(text, posIndex, color, callback)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -24, 0, 28)
-	btn.Position = UDim2.new(0, 12, 0, 348 + (posIndex - 1) * 32)
+	btn.Size = UDim2.new(1, -24, 0, 27)
+	btn.Position = UDim2.new(0, 12, 0, 334 + (posIndex - 1) * 31)
 	btn.BackgroundColor3 = color
 	btn.Text = text
 	btn.Font = Enum.Font.GothamBold
@@ -457,7 +529,8 @@ end
 
 createButton("1. 🔍 ตรวจสอบ NPC & Streaming สถานะ", 1, Color3.fromRGB(45, 80, 150), inspectStreaming)
 createButton("2. 📡 เทสยิง Remote ซื้อตรงนี้ (ระยะไกล)", 2, Color3.fromRGB(160, 60, 60), testDirectRemote)
-createButton("3. 🚀 บินไปหา NPC ที่เกาะ + ยิงซื้อ (แก้ระยะ)", 3, Color3.fromRGB(40, 140, 75), testTweenAndBuy)
-createButton("4. 🔙 บินกลับจุดเริ่มต้น", 4, Color3.fromRGB(80, 85, 95), returnToOrigin)
+createButton("3. ⚡ วาปไปหา NPC ทันที + ยิงซื้อ (Instant Warp)", 3, Color3.fromRGB(200, 120, 20), testInstantWarpAndBuy)
+createButton("4. 🚀 บินไปหา NPC แบบ Tween (Safe Flight)", 4, Color3.fromRGB(40, 140, 75), testTweenAndBuy)
+createButton("5. 🔙 วาปกลับจุดเริ่มต้น (Instant Return)", 5, Color3.fromRGB(80, 85, 95), returnToOrigin)
 
-addLog("สคริปต์ทดสอบพร้อมทำงาน! กรุณาเลือกปุ่มทดสอบที่ต้องการ")
+addLog("สคริปต์ทดสอบพร้อมทำงาน! รองรับทั้ง 'วาปทันที' และ 'บิน Tween'")
