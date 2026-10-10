@@ -25,6 +25,7 @@ EscapedPrisoner.Points = {
 
 EscapedPrisoner.Busy = false
 EscapedPrisoner.RoundDone = false
+EscapedPrisoner.QuestCompleted = false
 
 -- ตรวจสอบว่าโมเดลมอนสเตอร์ตัวนี้คือ Escaped Prisoner หรือไม่
 function EscapedPrisoner.IsEscaped(model)
@@ -37,9 +38,34 @@ function EscapedPrisoner.IsEscaped(model)
 		return false
 	end
 
+	local modelNameLower = model.Name:lower()
+	if modelNameLower:find("escaped") then
+		return true
+	end
+
 	for name in pairs(EscapedPrisoner.AccessoryNames) do
 		if model:FindFirstChild(name, true) then
 			return true
+		end
+	end
+
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("Accessory") then
+			local accName = child.Name:lower()
+			if accName:find("orangejacket") or accName:find("hair2") or accName:find("big_chain") or accName:find("escaped") then
+				return true
+			end
+		end
+	end
+
+	if modelNameLower:find("prisoner") and not Players:GetPlayerFromCharacter(model) then
+		local root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+		if root then
+			for _, pt in ipairs(EscapedPrisoner.Points) do
+				if (root.Position - pt).Magnitude <= 80 then
+					return true
+				end
+			end
 		end
 	end
 
@@ -457,6 +483,7 @@ function EscapedPrisoner.Run(env)
 
 				-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
 				local killStart = tick()
+				local foundAnyMob = false
 				while tick() - killStart < 35 do
 					if settingsObj.AutoFarm == false then
 						break
@@ -464,26 +491,31 @@ function EscapedPrisoner.Run(env)
 
 					local target = EscapedPrisoner.FindTargetNear(point, 180)
 					if not target then
-						-- มอนตายแล้ว หรือไม่มีมอนที่จุดนี้
-						break
-					end
-
-					local hum = target:FindFirstChildOfClass("Humanoid")
-					if not hum or hum.Health <= 0 then
-						break
-					end
-
-					-- โจมตีมอนสเตอร์ (ไม่ Bring Mob)
-					if subFunc and subFunc.Attack then
-						subFunc:Attack(target, false)
-					elseif utils and utils.GetFarmCFrame then
-						local root = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
-						if root and tweenMgr and tweenMgr.topos then
-							tweenMgr:topos(utils:GetFarmCFrame(root), true)
+						if not foundAnyMob and (tick() - killStart < 2.5) then
+							task.wait(0.25)
+						else
+							-- มอนตายแล้ว หรือไม่มีมอนที่จุดนี้
+							break
 						end
-					end
+					else
+						foundAnyMob = true
+						local hum = target:FindFirstChildOfClass("Humanoid")
+						if not hum or hum.Health <= 0 then
+							break
+						end
 
-					task.wait(0.15)
+						-- โจมตีมอนสเตอร์ (ไม่ Bring Mob)
+						if subFunc and subFunc.Attack then
+							subFunc:Attack(target, false)
+						elseif utils and utils.GetFarmCFrame then
+							local root = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+							if root and tweenMgr and tweenMgr.topos then
+								tweenMgr:topos(utils:GetFarmCFrame(root), true)
+							end
+						end
+
+						task.wait(0.15)
+					end
 				end
 
 				-- เคลียร์ Hitbox เมื่อกำจัดมอนสเตอร์จุดนี้เสร็จสิ้น
@@ -507,6 +539,7 @@ function EscapedPrisoner.Run(env)
 		local finalRemaining = EscapedPrisoner.FindTargets()
 		if #finalRemaining == 0 and settingsObj.AutoFarm ~= false then
 			EscapedPrisoner.InteractWithJailKeeper(env)
+			EscapedPrisoner.QuestCompleted = true
 		end
 	end)
 
@@ -528,31 +561,50 @@ function EscapedPrisoner.Handle(env)
 		isSea1 = attr == "Sea1" or game.PlaceId == 2753915549
 	end
 
-	if EscapedPrisoner.Busy then
-		return true
-	end
-
+	-- ทำเฉพาะใน Sea 1
 	if not isSea1 then
 		return false
 	end
 
+	-- ถ้าทำเควสต์นี้สำเร็จและเคลมรางวัลจาก Jail Keeper เรียบร้อยแล้ว ให้ข้ามเพื่อทำเควสต์ปกติต่อ
+	if EscapedPrisoner.QuestCompleted then
+		return false
+	end
+
+	-- ตรวจสอบจากระบบ Secret Quests Replication ว่าเควสต์ Escape from Alcatraz ผ่านแล้วหรือยัง
+	pcall(function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
+		if Net then
+			local netModule = require(Net)
+			local repFunc = netModule and netModule:RemoteFunction("RequestBonusMomentReplication")
+			if repFunc then
+				local res = repFunc:InvokeServer({ Type = "GetMomentProgress" })
+				if res and res.Data and res.Data["Sea1/Prison/Escape from Alcatraz"] == true then
+					EscapedPrisoner.QuestCompleted = true
+				end
+			end
+		end
+	end)
+
+	if EscapedPrisoner.QuestCompleted then
+		return false
+	end
+
+	-- ถ้ากำลังรันเควสต์อยู่แล้ว ให้คืนค่า true เพื่อไม่ให้ฟาร์มปกติแทรก
+	if EscapedPrisoner.Busy then
+		return true
+	end
+
+	-- ตรวจสอบระดับเลเวล (เฉพาะเลเวล >= 190 หรือเมื่อยังไม่ได้ข้อมูลเลเวล)
 	local lv = EscapedPrisoner.GetLevel()
-	if lv < 190 or lv > 209 then
+	if lv > 0 and lv < 190 then
 		return false
 	end
 
-	local targets = EscapedPrisoner.FindTargets()
-	if #targets == 0 then
-		EscapedPrisoner.RoundDone = false
-		return false
-	end
-
-	if EscapedPrisoner.RoundDone then
-		return false
-	end
-
+	-- เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
 	EscapedPrisoner.Run(env)
-	EscapedPrisoner.RoundDone = true
+
 	return true
 end
 
