@@ -552,6 +552,51 @@ function EscapedPrisoner.Run(env)
 	EscapedPrisoner.Busy = false
 end
 
+-- ที่อยู่ Remote Address ของเควสต์ลับ Escaped Prisoners ประจำเกาะคุก (Prison Island ใน Sea 1)
+EscapedPrisoner.RemoteAddress = "Sea1/Prison/Escape from Alcatraz"
+
+-- ตรวจสอบสถานะเควสต์ลับจาก Remote Address "Sea1/Prison/Escape from Alcatraz" โดยตรง
+-- คืนค่า:
+--   isPending: true = เควสต์นี้ยังค้างอยู่ (ยังไม่เสร็จ ต้องดำเนินการ)
+--   isCompleted: true = เควสต์นี้ทำเสร็จและเคลมรางวัลจากเซิร์ฟเวอร์แล้ว
+--   progressData: ตารางสถานะเควสต์ลับทั้งหมดที่ได้รับจากเซิร์ฟเวอร์
+function EscapedPrisoner.CheckRemoteQuestStatus()
+	local isCompleted = false
+	local progressData = nil
+
+	pcall(function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
+		if Net then
+			local netModule = require(Net)
+			local repFunc = netModule and netModule:RemoteFunction("RequestBonusMomentReplication")
+			if repFunc then
+				local res = repFunc:InvokeServer({ Type = "GetMomentProgress" })
+				if res and res.Data then
+					progressData = res.Data
+					if res.Data[EscapedPrisoner.RemoteAddress] == true then
+						isCompleted = true
+					end
+				end
+			end
+		end
+	end)
+
+	if isCompleted then
+		EscapedPrisoner.QuestCompleted = true
+		return false, true, progressData
+	end
+
+	if progressData then
+		local pending = progressData[EscapedPrisoner.RemoteAddress] ~= true
+		return pending, false, progressData
+	end
+
+	-- หากดึงจาก Server Remote ไม่สำเร็จ ให้ใช้สถานะ QuestCompleted ภายในตัวตัดสิน
+	local pending = not EscapedPrisoner.QuestCompleted
+	return pending, EscapedPrisoner.QuestCompleted, nil
+end
+
 -- ฟังก์ชันหลักในการตรวจสอบและเริ่มการจัดการ (Handle)
 function EscapedPrisoner.Handle(env)
 	env = env or {}
@@ -561,48 +606,30 @@ function EscapedPrisoner.Handle(env)
 		isSea1 = attr == "Sea1" or game.PlaceId == 2753915549
 	end
 
-	-- ทำเฉพาะใน Sea 1
+	-- 1. ทำเฉพาะใน Sea 1
 	if not isSea1 then
 		return false
 	end
 
-	-- ถ้าทำเควสต์นี้สำเร็จและเคลมรางวัลจาก Jail Keeper เรียบร้อยแล้ว ให้ข้ามเพื่อทำเควสต์ปกติต่อ
-	if EscapedPrisoner.QuestCompleted then
+	-- 2. ตรวจสอบสถานะเควสต์ลับจาก Remote Address "Sea1/Prison/Escape from Alcatraz" โดยตรง
+	local isPending, isCompleted = EscapedPrisoner.CheckRemoteQuestStatus()
+	if isCompleted or not isPending then
+		-- เควสต์ Escape from Alcatraz ผ่านและเคลมรางวัลแล้ว -> ส่ง false ให้ไปทำเควสต์ปกติ
 		return false
 	end
 
-	-- ตรวจสอบจากระบบ Secret Quests Replication ว่าเควสต์ Escape from Alcatraz ผ่านแล้วหรือยัง
-	pcall(function()
-		local ReplicatedStorage = game:GetService("ReplicatedStorage")
-		local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
-		if Net then
-			local netModule = require(Net)
-			local repFunc = netModule and netModule:RemoteFunction("RequestBonusMomentReplication")
-			if repFunc then
-				local res = repFunc:InvokeServer({ Type = "GetMomentProgress" })
-				if res and res.Data and res.Data["Sea1/Prison/Escape from Alcatraz"] == true then
-					EscapedPrisoner.QuestCompleted = true
-				end
-			end
-		end
-	end)
-
-	if EscapedPrisoner.QuestCompleted then
-		return false
-	end
-
-	-- ถ้ากำลังรันเควสต์อยู่แล้ว ให้คืนค่า true เพื่อไม่ให้ฟาร์มปกติแทรก
+	-- 3. ถ้ากำลังรันเควสต์อยู่แล้ว ให้คืนค่า true เพื่อไม่ให้ฟาร์มปกติแทรก
 	if EscapedPrisoner.Busy then
 		return true
 	end
 
-	-- ตรวจสอบระดับเลเวล (เฉพาะเลเวล >= 190 หรือเมื่อยังไม่ได้ข้อมูลเลเวล)
+	-- 4. ตรวจสอบระดับเลเวล (เฉพาะเลเวล >= 190 หรือเมื่อยังไม่ได้ข้อมูลเลเวล)
 	local lv = EscapedPrisoner.GetLevel()
 	if lv > 0 and lv < 190 then
 		return false
 	end
 
-	-- เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
+	-- 5. เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
 	EscapedPrisoner.Run(env)
 
 	return true
