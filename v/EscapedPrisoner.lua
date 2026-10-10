@@ -26,6 +26,7 @@ EscapedPrisoner.Points = {
 EscapedPrisoner.Busy = false
 EscapedPrisoner.RoundDone = false
 EscapedPrisoner.QuestCompleted = false
+EscapedPrisoner.NextCheckTick = 0
 
 -- ตรวจสอบว่าโมเดลมอนสเตอร์ตัวนี้คือ Escaped Prisoner หรือไม่
 function EscapedPrisoner.IsEscaped(model)
@@ -433,10 +434,12 @@ function EscapedPrisoner.Run(env)
 	local prevBring = settingsObj.BringMonster
 	settingsObj.BringMonster = false
 
+	local runSuccess = false
 	local ok, err = pcall(function()
 		-- [ลูปตรวจเช็ค]: วนกำจัด EscapedPrisoner ให้หมดก่อนไปหา NPC
 		local maxRounds = 5
 		local currentRound = 0
+		local totalMobsEncountered = 0
 
 		while currentRound < maxRounds do
 			currentRound += 1
@@ -484,6 +487,7 @@ function EscapedPrisoner.Run(env)
 				-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
 				local killStart = tick()
 				local foundAnyMob = false
+				local countedMob = false
 				while tick() - killStart < 35 do
 					if settingsObj.AutoFarm == false then
 						break
@@ -499,6 +503,11 @@ function EscapedPrisoner.Run(env)
 						end
 					else
 						foundAnyMob = true
+						if not countedMob then
+							countedMob = true
+							totalMobsEncountered += 1
+						end
+
 						local hum = target:FindFirstChildOfClass("Humanoid")
 						if not hum or hum.Health <= 0 then
 							break
@@ -526,6 +535,15 @@ function EscapedPrisoner.Run(env)
 				task.wait(0.3)
 			end
 
+			-- [ป้องกันลูปวนเมื่อม็อบยังไม่เกิดใหม่]
+			-- หากบินครบทั้ง 3 จุดในรอบแรกแล้วไม่เจอม็อบเลยแม้แต่ตัวเดียว (คนอื่นเพิ่งตีไปหรือยังไม่เกิด)
+			-- ให้หยุดวนลูปทันที ไม่บินไปหา Jail Keeper และตั้ง Cooldown เพื่อกลับไปฟาร์มปกติ
+			if totalMobsEncountered == 0 then
+				EscapedPrisoner.NextCheckTick = tick() + 35
+				EscapedPrisoner.QuestCompleted = false
+				return false
+			end
+
 			-- เช็คก่อนไปหา NPC ว่ายังมี EscapedPrisoner อยู่ไหม
 			local remaining = EscapedPrisoner.FindTargets()
 			if #remaining == 0 then
@@ -535,11 +553,12 @@ function EscapedPrisoner.Run(env)
 			end
 		end
 
-		-- [5. ก่อนไปหา NPC: ยืนยันว่าไม่มี EscapedPrisoner เหลืออยู่แล้ว จึง Tween ไปหา NPC Jail Keeper แล้วกดปุ่ม "โต้ตอบ" / "Interact"]
+		-- [5. ก่อนไปหา NPC: ยืนยันว่าพบและกำจัดม็อบแล้ว และไม่มี EscapedPrisoner เหลืออยู่แล้ว จึง Tween ไปหา NPC Jail Keeper แล้วกดปุ่ม "โต้ตอบ" / "Interact"]
 		local finalRemaining = EscapedPrisoner.FindTargets()
-		if #finalRemaining == 0 and settingsObj.AutoFarm ~= false then
+		if #finalRemaining == 0 and totalMobsEncountered > 0 and settingsObj.AutoFarm ~= false then
 			EscapedPrisoner.InteractWithJailKeeper(env)
 			EscapedPrisoner.QuestCompleted = true
+			runSuccess = true
 		end
 	end)
 
@@ -550,6 +569,7 @@ function EscapedPrisoner.Run(env)
 	-- คืนค่า Bring Mob เดิมหลังทำครบ 3 จุด (หรือหยุดฟาร์ม)
 	settingsObj.BringMonster = prevBring
 	EscapedPrisoner.Busy = false
+	return runSuccess
 end
 
 -- ที่อยู่ Remote Address ของเควสต์ลับ Escaped Prisoners ประจำเกาะคุก (Prison Island ใน Sea 1)
@@ -618,6 +638,11 @@ function EscapedPrisoner.Handle(env)
 		return false
 	end
 
+	-- 2.1 ตรวจสอบ Cooldown หากรอบที่แล้วไม่เจอม็อบ (รอม็อบเกิดใหม่ ให้กลับไปฟาร์มปกติ)
+	if EscapedPrisoner.NextCheckTick and tick() < EscapedPrisoner.NextCheckTick then
+		return false
+	end
+
 	-- 3. ถ้ากำลังรันเควสต์อยู่แล้ว ให้คืนค่า true เพื่อไม่ให้ฟาร์มปกติแทรก
 	if EscapedPrisoner.Busy then
 		return true
@@ -630,9 +655,9 @@ function EscapedPrisoner.Handle(env)
 	end
 
 	-- 5. เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
-	EscapedPrisoner.Run(env)
+	local ran = EscapedPrisoner.Run(env)
 
-	return true
+	return ran == true
 end
 
 return EscapedPrisoner
