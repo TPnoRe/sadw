@@ -167,6 +167,232 @@ function EscapedPrisoner.AutoAdvanceDialogue(maxDuration)
 	end
 end
 
+-- ค้นหา NPC Jail Keeper บนเกาะคุก (Prison Island ใน Sea 1)
+function EscapedPrisoner.FindJailKeeper()
+	local npcsFolder = Workspace:FindFirstChild("NPCs")
+	local candidates = {
+		"Jail Keeper",
+		"JailKeeper",
+		"Prison Adventurer",
+		"PrisonAdventurer",
+		"Warden",
+		"Chief Warden",
+	}
+
+	-- 1. ค้นหาใน Workspace.NPCs
+	if npcsFolder then
+		for _, name in ipairs(candidates) do
+			local found = npcsFolder:FindFirstChild(name)
+			if found and found:IsA("Model") then
+				return found, found:GetPivot().Position
+			end
+		end
+
+		for _, child in ipairs(npcsFolder:GetChildren()) do
+			if child:IsA("Model") then
+				local n = child.Name:lower()
+				if (n:find("jail") and n:find("keeper")) or (n:find("prison") and n:find("adventurer")) or n:find("warden") then
+					return child, child:GetPivot().Position
+				end
+			end
+		end
+	end
+
+	-- 2. ค้นหาทั่ว Workspace
+	for _, name in ipairs(candidates) do
+		local found = Workspace:FindFirstChild(name, true)
+		if found and found:IsA("Model") then
+			return found, found:GetPivot().Position
+		end
+	end
+
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child:IsA("Model") then
+			local n = child.Name:lower()
+			if (n:find("jail") and n:find("keeper")) or n == "jail keeper" or n == "jailkeeper" then
+				return child, child:GetPivot().Position
+			end
+		end
+	end
+
+	-- 3. Fallback: พิกัดศูนย์กลางเกาะคุก (Prison Courtyard)
+	return nil, Vector3.new(4870, 6, 736)
+end
+
+-- ค้นหาและคลิกปุ่ม "โต้ตอบ" / "Interact" ใน PlayerGui
+function EscapedPrisoner.ClickInteractButton()
+	local player = localPlayer or Players.LocalPlayer
+	local pGui = player and player:FindFirstChild("PlayerGui")
+	if not pGui then
+		return false
+	end
+
+	local clicked = false
+
+	for _, gui in ipairs(pGui:GetDescendants()) do
+		if (gui:IsA("TextButton") or gui:IsA("ImageButton")) and gui.Visible then
+			local text = ""
+			if gui:IsA("TextButton") then
+				text = gui.Text:lower()
+			end
+
+			if text == "" then
+				local lbl = gui:FindFirstChildOfClass("TextLabel")
+				if lbl and lbl.Text then
+					text = lbl.Text:lower()
+				end
+			end
+
+			local name = gui.Name:lower()
+
+			if text:find("โต้ตอบ") or text:find("interact") or name:find("interact") then
+				pcall(function()
+					if firesignal then
+						firesignal(gui.Activated)
+						firesignal(gui.MouseButton1Click)
+					end
+				end)
+				clicked = true
+			end
+		end
+	end
+
+	return clicked
+end
+
+-- Tween ไปหา NPC Jail Keeper และกดปุ่ม "โต้ตอบ" / "Interact" พร้อมเคลียร์บทสนทนา
+function EscapedPrisoner.InteractWithJailKeeper(env)
+	env = env or {}
+	local tweenMgr = env.tweenManager or _G.tweenManager
+	local settingsObj = env.Settings or _G.Settings or {}
+	local advanceDialogue = env.autoAdvanceDialogue or (utils and utils.AutoAdvanceDialogue and function() return utils:AutoAdvanceDialogue() end) or _G.autoAdvanceDialogue or EscapedPrisoner.AutoAdvanceDialogue
+
+	local npcModel, npcPos = EscapedPrisoner.FindJailKeeper()
+	local targetCF = nil
+
+	if npcModel then
+		local root = npcModel:FindFirstChild("HumanoidRootPart") or npcModel.PrimaryPart or npcModel:FindFirstChildWhichIsA("BasePart")
+		if root then
+			targetCF = root.CFrame * CFrame.new(0, 0, 3)
+		else
+			targetCF = npcModel:GetPivot() * CFrame.new(0, 0, 3)
+		end
+	end
+
+	if not targetCF then
+		targetCF = CFrame.new(npcPos + Vector3.new(0, 3, 0))
+	end
+
+	-- 1. บิน/Tween ไปหน้า NPC Jail Keeper
+	local tweenStart = tick()
+	while tick() - tweenStart < 15 do
+		if settingsObj.AutoFarm == false then
+			return false
+		end
+
+		local char = localPlayer and localPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp and (hrp.Position - targetCF.Position).Magnitude <= 12 then
+			break
+		end
+
+		if tweenMgr and tweenMgr.topos then
+			tweenMgr:topos(targetCF, true)
+		end
+		task.wait(0.25)
+	end
+
+	task.wait(0.3)
+
+	-- 2. กดโต้ตอบกับ NPC (ProximityPrompt + VirtualInputManager E + ClickDetector + ปุ่ม GUI)
+	local char = localPlayer and localPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+	-- 2.1 ProximityPrompt รอบตัว
+	if hrp then
+		for _, desc in ipairs(Workspace:GetDescendants()) do
+			if desc:IsA("ProximityPrompt") and desc.Enabled then
+				local pPos = (desc.Parent:IsA("BasePart") and desc.Parent.Position)
+					or (desc.Parent:IsA("Attachment") and desc.Parent.WorldPosition)
+					or (desc.Parent:IsA("Model") and desc.Parent:GetPivot().Position)
+				if pPos and (pPos - hrp.Position).Magnitude <= 30 then
+					pcall(function()
+						desc.HoldDuration = 0
+						if fireproximityprompt then
+							fireproximityprompt(desc, 0)
+							fireproximityprompt(desc, math.huge)
+						end
+						desc:InputHoldBegin()
+						task.wait(0.05)
+						desc:InputHoldEnd()
+					end)
+				end
+			end
+		end
+	end
+
+	-- 2.2 ClickDetector ใน NPC
+	if npcModel then
+		for _, desc in ipairs(npcModel:GetDescendants()) do
+			if desc:IsA("ClickDetector") and fireclickdetector then
+				pcall(function()
+					fireclickdetector(desc)
+				end)
+			end
+		end
+	end
+
+	-- 2.3 กดปุ่ม [E]
+	pcall(function()
+		local vim = game:GetService("VirtualInputManager")
+		if vim then
+			vim:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+			task.wait(0.1)
+			vim:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+		end
+	end)
+
+	-- 2.4 คลิกปุ่ม "โต้ตอบ" / "Interact" ใน PlayerGui
+	for _ = 1, 6 do
+		EscapedPrisoner.ClickInteractButton()
+		task.wait(0.12)
+	end
+
+	-- 2.5 สำรอง: ยิง Remote BonusMomentsGuide / ClaimReward
+	pcall(function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local Net = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Net")
+		if Net then
+			local netModule = require(Net)
+			local guide = netModule and netModule:RemoteFunction("BonusMomentsGuide")
+			if guide then
+				local nName = npcModel and npcModel.Name or "Jail Keeper"
+				guide:InvokeServer("InteractQuestGiver", nName)
+				guide:InvokeServer("InteractQuestGiver", "Jail Keeper")
+				guide:InvokeServer("InteractQuestGiver", "Prison Adventurer")
+			end
+		end
+		local bonusMomentsRemoteFunction = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("BonusMomentsRemoteFunction")
+		if bonusMomentsRemoteFunction then
+			bonusMomentsRemoteFunction:InvokeServer("Escape from Alcatraz", "ClaimReward")
+		end
+	end)
+
+	-- 2.6 ผ่านบทสนทนา DialogueGui
+	if advanceDialogue then
+		local diagStart = tick()
+		while tick() - diagStart < 4 do
+			local clicked = advanceDialogue()
+			if not clicked then
+				break
+			end
+			task.wait(0.25)
+		end
+	end
+
+	return true
+end
+
 -- ฟังก์ชันรันวน 3 จุด: ปิด Bring Mob อย่างเดียว -> Tween -> Dialogue -> ตีมอนจนตาย -> ไปจุดถัดไป
 function EscapedPrisoner.Run(env)
 	env = env or {}
@@ -256,6 +482,11 @@ function EscapedPrisoner.Run(env)
 			end
 
 			task.wait(0.3)
+		end
+
+		-- [5. หลังเควสต์นี้เสร็จ: Tween ไปหา NPC Jail Keeper แล้วคลิกปุ่ม "โต้ตอบ" / "Interact"]
+		if settingsObj.AutoFarm ~= false then
+			EscapedPrisoner.InteractWithJailKeeper(env)
 		end
 	end)
 
