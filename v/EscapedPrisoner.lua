@@ -1,6 +1,7 @@
 -- ==============================================================================
 -- [MODULE: EscapedPrisoner] ระบบตรวจจับและจัดการ Escaped Prisoners (เลเวล 190-209)
 -- หมวดหมู่: 14.1 Main Level & Mob Checker
+-- รายละเอียด: ปิด Bring Mob ชั่วคราว, Tween วน 3 จุด, กด Dialogue, ตีมอนจนตายทีละจุด
 -- ==============================================================================
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -22,7 +23,6 @@ EscapedPrisoner.Points = {
 	Vector3.new(5525.46435546875, 9.008895874023438, 933.4722900390625),
 }
 
-EscapedPrisoner.Stay = 4 -- ระยะเวลาหยุดรอในแต่ละจุด (วินาที)
 EscapedPrisoner.Busy = false
 EscapedPrisoner.RoundDone = false
 
@@ -63,6 +63,31 @@ function EscapedPrisoner.FindTargets()
 	return targets
 end
 
+-- ค้นหามอนสเตอร์ Escaped Prisoner ที่อยู่ใกล้พิกัดที่กำหนด
+function EscapedPrisoner.FindTargetNear(pos, radius)
+	radius = radius or 180
+	local enemiesFolder = Workspace:FindFirstChild("Enemies")
+	if not enemiesFolder then
+		return nil
+	end
+
+	local closest, minDist = nil, radius
+	for _, child in ipairs(enemiesFolder:GetChildren()) do
+		if EscapedPrisoner.IsEscaped(child) then
+			local root = child:FindFirstChild("HumanoidRootPart") or child.PrimaryPart
+			if root then
+				local dist = (root.Position - pos).Magnitude
+				if dist < minDist then
+					minDist = dist
+					closest = child
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
 -- ตรวจสอบเลเวลผู้เล่น (ช่วงเลเวลที่ต้องล่า Escaped Prisoner: 190 - 209)
 function EscapedPrisoner.GetLevel()
 	local player = localPlayer or Players.LocalPlayer
@@ -71,117 +96,159 @@ function EscapedPrisoner.GetLevel()
 	return lv and tonumber(lv.Value) or 0
 end
 
--- คุย DialogueGui 2 ขั้น เพื่อกด "Not this time!"
-function EscapedPrisoner.ClickNotThisTime()
+-- กดข้ามและเลือก DialogueGui อัตโนมัติ (pageButton, optionsList, "Not this time!")
+function EscapedPrisoner.AutoAdvanceDialogue(maxDuration)
+	maxDuration = maxDuration or 2.5
+	local startTime = tick()
 	local player = localPlayer or Players.LocalPlayer
-	local gui = player and player:FindFirstChild("PlayerGui")
-	local dg = gui and gui:FindFirstChild("DialogueGui")
 
-	if dg then
-		local frame = nil
-		for _, c in ipairs(dg:GetChildren()) do
-			if c:FindFirstChild("pageButton") or c:FindFirstChild("optionsList") then
-				frame = c
-				break
-			end
+	while tick() - startTime < maxDuration do
+		local gui = player and player:FindFirstChild("PlayerGui")
+		local dg = gui and gui:FindFirstChild("DialogueGui")
+		if not dg or not dg.Enabled then
+			break
 		end
 
-		if frame then
-			-- ขั้นที่ 1: คลิก pageButton (หน้ายังไม่ครบ)
-			local pb = frame:FindFirstChild("pageButton")
+		local clicked = false
+
+		-- 1. ตรวจสอบ pageButton และ optionsList ภายใน DialogueGui
+		for _, c in ipairs(dg:GetChildren()) do
+			local pb = c:FindFirstChild("pageButton")
 			if pb and pb:IsA("GuiButton") and pb.Visible then
 				pcall(function()
-					firesignal(pb.Activated)
+					if firesignal then
+						firesignal(pb.Activated)
+						firesignal(pb.MouseButton1Click)
+					end
 				end)
-				return true, true
+				clicked = true
 			end
 
-			-- ขั้นที่ 2: เลือก option จาก text "Not this time!" ใน optionsList.scroller
-			local ol = frame:FindFirstChild("optionsList")
+			local ol = c:FindFirstChild("optionsList")
 			local sc = ol and ol:FindFirstChild("scroller")
 			if sc then
 				for _, child in ipairs(sc:GetChildren()) do
 					local btn = child:FindFirstChild("button")
-					if btn and btn:IsA("GuiButton") then
-						local txt = btn:IsA("TextButton") and btn.Text
-						if type(txt) ~= "string" then
-							for _, sub in ipairs(child:GetDescendants()) do
-								if sub:IsA("TextLabel") and type(sub.Text) == "string" and sub.Text ~= "" then
-									txt = sub.Text
-									break
-								end
-							end
-						end
-
-						if type(txt) == "string" and txt:lower():find("not this time") then
-							pcall(function()
+					if btn and btn:IsA("GuiButton") and btn.Visible then
+						pcall(function()
+							if firesignal then
 								firesignal(btn.Activated)
-							end)
-							return true, false
-						end
+								firesignal(btn.MouseButton1Click)
+							end
+						end)
+						clicked = true
 					end
 				end
 			end
 		end
-	end
 
-	-- Fallback: ค้นหาทั้ง PlayerGui
-	if gui then
-		for _, d in ipairs(gui:GetDescendants()) do
-			local txt = d:IsA("TextButton") and d.Text
-			if type(txt) ~= "string" then
-				local ok, lbl = pcall(function()
-					return d:FindFirstChildOfClass("TextLabel")
-				end)
-				txt = ok and lbl and lbl.Text
-			end
+		-- 2. ค้นหาปุ่มข้อความตอบรับทั่วไป เช่น "Not this time!", "Claim", "Yes", "Ok"
+		for _, d in ipairs(dg:GetDescendants()) do
+			if d:IsA("GuiButton") and d.Visible then
+				local txt = d:IsA("TextButton") and d.Text:lower() or ""
+				if txt == "" then
+					local lbl = d:FindFirstChildOfClass("TextLabel")
+					txt = lbl and lbl.Text:lower() or ""
+				end
 
-			if type(txt) == "string" and txt:lower():find("not this time") then
-				local btn = d:IsA("GuiButton") and d or d.Parent
-				if btn and btn:IsA("GuiButton") then
+				if txt:find("not this time") or txt:find("claim") or txt:find("reward") or txt:find("yes") or txt:find("ok") or txt:find("continue") then
 					pcall(function()
-						firesignal(btn.Activated)
+						if firesignal then
+							firesignal(d.Activated)
+							firesignal(d.MouseButton1Click)
+						end
 					end)
-					return true, false
+					clicked = true
 				end
 			end
 		end
-	end
 
-	return false, false
+		task.wait(clicked and 0.25 or 0.3)
+	end
 end
 
--- ฟังก์ชันรันการวน 3 จุด (รับ env สำหรับ tweenManager และ Settings)
+-- ฟังก์ชันรันวน 3 จุด: ปิด Bring Mob อย่างเดียว -> Tween -> Dialogue -> ตีมอนจนตาย -> ไปจุดถัดไป
 function EscapedPrisoner.Run(env)
 	env = env or {}
 	local tweenMgr = env.tweenManager or _G.tweenManager
 	local settingsObj = env.Settings or _G.Settings or {}
+	local subFunc = env.subFunction or (OxiasidianAPI and OxiasidianAPI.SubFunction)
+	local utils = env.utilities or _G.utilities
 
 	EscapedPrisoner.Busy = true
 
+	-- [1. ปิด Bring Mob ไว้ก่อนแค่อย่างเดียว]
 	local prevBring = settingsObj.BringMonster
-	local prevAttack = settingsObj.AutoAttack
-	local prevDouble = settingsObj.DoubleAttack
-
 	settingsObj.BringMonster = false
-	settingsObj.AutoAttack = false
-	settingsObj.DoubleAttack = false
 
 	local ok, err = pcall(function()
-		for _, point in ipairs(EscapedPrisoner.Points) do
+		-- ทำวนให้ครบทั้ง 3 จุด
+		for i, point in ipairs(EscapedPrisoner.Points) do
+			if settingsObj.AutoFarm == false then
+				break
+			end
+
+			-- [2. Tween ไปจุดของ escapedPoints]
 			local t0 = tick()
-			while tick() - t0 < EscapedPrisoner.Stay do
+			local targetCF = CFrame.new(point)
+			while tick() - t0 < 15 do
 				if settingsObj.AutoFarm == false then
-					return
+					break
+				end
+
+				local char = localPlayer and localPlayer.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp and (hrp.Position - point).Magnitude <= 18 then
+					break
 				end
 
 				if tweenMgr and tweenMgr.topos then
-					tweenMgr:topos(point)
+					tweenMgr:topos(targetCF, true)
+				end
+				task.wait(0.25)
+			end
+
+			-- [3. รัน AutoAdvanceDialogue() ให้เสร็จ]
+			EscapedPrisoner.AutoAdvanceDialogue(3)
+			task.wait(0.2)
+
+			-- [4. ตีมอนจุดนั้นให้ตาย ค่อยไปพิกัดใน escapedPoints จุดต่อไป]
+			local killStart = tick()
+			while tick() - killStart < 35 do
+				if settingsObj.AutoFarm == false then
+					break
 				end
 
-				local clicked = EscapedPrisoner.ClickNotThisTime()
-				task.wait(clicked and 0.25 or 0.4)
+				local target = EscapedPrisoner.FindTargetNear(point, 180)
+				if not target then
+					-- มอนตายแล้ว หรือไม่มีมอนที่จุดนี้
+					break
+				end
+
+				local hum = target:FindFirstChildOfClass("Humanoid")
+				if not hum or hum.Health <= 0 then
+					break
+				end
+
+				-- โจมตีมอนสเตอร์ (ไม่ Bring Mob)
+				if subFunc and subFunc.Attack then
+					subFunc:Attack(target, false)
+				elseif utils and utils.GetFarmCFrame then
+					local root = target:FindFirstChild("HumanoidRootPart") or target.PrimaryPart
+					if root and tweenMgr and tweenMgr.topos then
+						tweenMgr:topos(utils:GetFarmCFrame(root), true)
+					end
+				end
+
+				task.wait(0.15)
 			end
+
+			-- เคลียร์ Hitbox เมื่อกำจัดมอนสเตอร์จุดนี้เสร็จสิ้น
+			if utils and utils.ClearHitbox then
+				utils:ClearHitbox()
+			end
+
+			task.wait(0.3)
 		end
 	end)
 
@@ -189,9 +256,8 @@ function EscapedPrisoner.Run(env)
 		warn("[Escaped Prisoners] error: " .. tostring(err))
 	end
 
+	-- คืนค่า Bring Mob เดิมหลังทำครบ 3 จุด (หรือหยุดฟาร์ม)
 	settingsObj.BringMonster = prevBring
-	settingsObj.AutoAttack = prevAttack
-	settingsObj.DoubleAttack = prevDouble
 	EscapedPrisoner.Busy = false
 end
 
