@@ -360,7 +360,7 @@ local function stopNoclip()
 end
 
 -- ==============================================================================
--- [ACTION: วาปไปหา Mad Scientist ทันที + ยิงซื้อพร้อมกันทันที (Simultaneous Warp & Buy)]
+-- [ACTION: วาปไปหา Mad Scientist ก่อน แล้วค่อยยิงซื้อ (Warp First -> Then Buy)]
 -- ==============================================================================
 local function testInstantWarpAndBuy()
 	local char = localPlayer.Character
@@ -381,53 +381,42 @@ local function testInstantWarpAndBuy()
 	local destination = targetCF * CFrame.new(0, 0, -3.5)
 	local dist = (hrp.Position - destination.Position).Magnitude
 
-	addLog(string.format("⚡ วาปไปหน้า Mad Scientist + ยิงคำสั่งซื้อพร้อมกันทันที! (%d studs)", math.floor(dist)))
-
-	-- 1. วาป CFrame ทันทีพร้อมตัดแรงเฉื่อย
+	-- ขั้นที่ 1: วาปไปก่อน
+	addLog(string.format("⚡ [ขั้นที่ 1] วาปไปหน้า Mad Scientist ก่อน... (ระยะทาง %d studs)", math.floor(dist)))
 	hrp.AssemblyLinearVelocity = Vector3.zero
 	hrp.AssemblyAngularVelocity = Vector3.zero
 	hrp.CFrame = destination
 
-	-- เรียก RequestStream ใน background
-	task.spawn(function()
-		pcall(function()
-			Workspace:RequestStreamAroundAsync(destination.Position)
-		end)
+	-- โหลดแมพ/ชิ้นส่วน NPC เข้ามา
+	pcall(function()
+		Workspace:RequestStreamAroundAsync(destination.Position)
 	end)
 
-	-- 2. ยิงคำสั่งซื้อ BuyElectro พร้อมกันทันที (Zero Delay)!
-	local lastResult = nil
-	local function fireBuy(pulseIndex)
-		local ok, res = pcall(function()
-			return commF:InvokeServer(REMOTE_NAME)
-		end)
-		if ok and res ~= nil then
-			lastResult = res
-		end
-		addLog(string.format("🛒 ยิงซื้อทันที (รอบที่ %d) -> ผลลัพธ์: %s", pulseIndex, tostring(res)))
+	-- ขั้นที่ 2: รอให้พิกัดตัวละครซิงค์ขึ้น Server ก่อน
+	addLog("⏳ วาปถึงแล้ว! กำลังรอ Server ซิงค์พิกัดตัวละคร (0.3 วินาที)...")
+	task.wait(0.3)
+
+	-- ขั้นที่ 3: พอตัวละครยืนอยู่หน้า NPC บน Server แล้ว ค่อยยิงซื้อ!
+	addLog("🛒 [ขั้นที่ 2] ยิงคำสั่งซื้อ InvokeServer('BuyElectro')...")
+	local startT = tick()
+	local ok, result = pcall(function()
+		return commF:InvokeServer(REMOTE_NAME)
+	end)
+	local elapsed = tick() - startT
+
+	if not ok then
+		addLog("❌ เกิด Error ขณะ InvokeServer: " .. tostring(result))
+		return
 	end
 
-	-- ยิงรอบแรกทันทีพร้อมกับตอนที่วาปถึง
-	fireBuy(1)
-
-	-- ยิงซ้ำแบบ Rapid Pulse (0.1s และ 0.25s) เผื่อ Ping ระหว่างส่ง CFrame ขึ้น Server
-	task.wait(0.1)
-	local ownedNow, nameNow = checkMeleeOwned()
-	if not ownedNow then
-		fireBuy(2)
-		task.wait(0.15)
-		local owned2, name2 = checkMeleeOwned()
-		if not owned2 then
-			fireBuy(3)
-		end
-	end
+	addLog(string.format("📩 ผลลัพธ์จาก Server (ใช้เวลา %.2fs): %s", elapsed, tostring(result)))
 
 	task.wait(0.3)
 	local owned, ownedName = checkMeleeOwned()
 	if owned then
-		addLog("🎉 สำเร็จ 100%! ซื้อและได้รับหมัด " .. tostring(ownedName) .. " แล้ว!")
+		addLog("🎉 สำเร็จ 100%! วาปก่อนแล้วซื้อสำเร็จ ได้รับหมัด " .. tostring(ownedName) .. " แล้ว!")
 	else
-		addLog(string.format("⚠️ ผลลัพธ์ล่าสุด: %s (หากยังไม่ได้ ตรวจสอบเงิน Beli ต้องมีอย่างน้อย $500,000)", tostring(lastResult)))
+		addLog(string.format("⚠️ ผลลัพธ์: %s (หากยังไม่ได้รับ ตรวจสอบเงิน Beli ต้องมีอย่างน้อย $500,000)", tostring(result)))
 	end
 end
 
