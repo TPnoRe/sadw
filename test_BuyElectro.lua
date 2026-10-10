@@ -360,7 +360,7 @@ local function stopNoclip()
 end
 
 -- ==============================================================================
--- [ACTION: วาปไปหา Mad Scientist ทันที (Instant CFrame Warp)]
+-- [ACTION: วาปไปหา Mad Scientist ทันที + ยิงซื้อพร้อมกันทันที (Simultaneous Warp & Buy)]
 -- ==============================================================================
 local function testInstantWarpAndBuy()
 	local char = localPlayer.Character
@@ -370,67 +370,64 @@ local function testInstantWarpAndBuy()
 		return
 	end
 
-	originalCFrame = hrp.CFrame
-	local targetCF = getNPCCFrame()
-	local destination = targetCF * CFrame.new(0, 0, -3.5)
-	local dist = (hrp.Position - destination.Position).Magnitude
-
-	addLog(string.format("⚡ เริ่มต้นวาปทันที (Instant Warp) ไปหา Mad Scientist (%d studs)...", math.floor(dist)))
-
-	-- เคลียร์แรงเฉื่อยและเซตพิกัดทันที
-	hrp.AssemblyLinearVelocity = Vector3.zero
-	hrp.AssemblyAngularVelocity = Vector3.zero
-	hrp.CFrame = destination
-
-	-- เรียก RequestStreamAroundAsync เพื่อบังคับให้โหลดแมพและ NPC ทันที
-	pcall(function()
-		Workspace:RequestStreamAroundAsync(destination.Position)
-	end)
-
-	addLog("⏳ วาปถึงแล้ว! กำลังรอ Server & Client Streaming ซิงค์ข้อมูล (0.5s)...")
-	task.wait(0.5)
-
-	-- ตรวจสอบชิ้นส่วน NPC ณ จุดเป้าหมาย
-	local npc = getNPCModel()
-	local partsCount = 0
-	if npc then
-		for _, child in ipairs(npc:GetDescendants()) do
-			if child:IsA("BasePart") then
-				partsCount = partsCount + 1
-			end
-		end
-		addLog(string.format("👀 ตรวจสอบชิ้นส่วน Mad Scientist หลังวาป: %d ชิ้นส่วน", partsCount))
-	else
-		addLog("⚠️ ยังไม่พบโมเดล Mad Scientist หลังวาป")
-	end
-
-	-- ยิงคำสั่งซื้อหมัดที่หน้า NPC
-	addLog("🛒 กำลังยิง Remote 'BuyElectro' ที่หน้า NPC...")
 	local commF = getCommF()
 	if not commF then
 		addLog("❌ ไม่พบ Remote CommF_!")
 		return
 	end
 
-	local startT = tick()
-	local ok, result = pcall(function()
-		return commF:InvokeServer(REMOTE_NAME)
-	end)
-	local elapsed = tick() - startT
+	originalCFrame = hrp.CFrame
+	local targetCF = getNPCCFrame()
+	local destination = targetCF * CFrame.new(0, 0, -3.5)
+	local dist = (hrp.Position - destination.Position).Magnitude
 
-	if not ok then
-		addLog("❌ เกิด Error ขณะ InvokeServer: " .. tostring(result))
-		return
+	addLog(string.format("⚡ วาปไปหน้า Mad Scientist + ยิงคำสั่งซื้อพร้อมกันทันที! (%d studs)", math.floor(dist)))
+
+	-- 1. วาป CFrame ทันทีพร้อมตัดแรงเฉื่อย
+	hrp.AssemblyLinearVelocity = Vector3.zero
+	hrp.AssemblyAngularVelocity = Vector3.zero
+	hrp.CFrame = destination
+
+	-- เรียก RequestStream ใน background
+	task.spawn(function()
+		pcall(function()
+			Workspace:RequestStreamAroundAsync(destination.Position)
+		end)
+	end)
+
+	-- 2. ยิงคำสั่งซื้อ BuyElectro พร้อมกันทันที (Zero Delay)!
+	local lastResult = nil
+	local function fireBuy(pulseIndex)
+		local ok, res = pcall(function()
+			return commF:InvokeServer(REMOTE_NAME)
+		end)
+		if ok and res ~= nil then
+			lastResult = res
+		end
+		addLog(string.format("🛒 ยิงซื้อทันที (รอบที่ %d) -> ผลลัพธ์: %s", pulseIndex, tostring(res)))
 	end
 
-	addLog(string.format("📩 ผลลัพธ์จาก Server (ใช้เวลา %.2fs): %s", elapsed, tostring(result)))
+	-- ยิงรอบแรกทันทีพร้อมกับตอนที่วาปถึง
+	fireBuy(1)
+
+	-- ยิงซ้ำแบบ Rapid Pulse (0.1s และ 0.25s) เผื่อ Ping ระหว่างส่ง CFrame ขึ้น Server
+	task.wait(0.1)
+	local ownedNow, nameNow = checkMeleeOwned()
+	if not ownedNow then
+		fireBuy(2)
+		task.wait(0.15)
+		local owned2, name2 = checkMeleeOwned()
+		if not owned2 then
+			fireBuy(3)
+		end
+	end
 
 	task.wait(0.3)
 	local owned, ownedName = checkMeleeOwned()
 	if owned then
-		addLog("🎉 สำเร็จ! ผู้เล่นได้รับหมัด " .. tostring(ownedName) .. " เรียบร้อยแล้ว!")
+		addLog("🎉 สำเร็จ 100%! ซื้อและได้รับหมัด " .. tostring(ownedName) .. " แล้ว!")
 	else
-		addLog("⚠️ ยังไม่ได้รับหมัด: ตรวจสอบเงิน ($500k) หรือการตอบสนองของเซิร์ฟเวอร์")
+		addLog(string.format("⚠️ ผลลัพธ์ล่าสุด: %s (หากยังไม่ได้ ตรวจสอบเงิน Beli ต้องมีอย่างน้อย $500,000)", tostring(lastResult)))
 	end
 end
 
