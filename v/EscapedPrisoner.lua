@@ -26,7 +26,6 @@ EscapedPrisoner.Points = {
 EscapedPrisoner.Busy = false
 EscapedPrisoner.RoundDone = false
 EscapedPrisoner.QuestCompleted = false
-EscapedPrisoner.NextCheckTick = 0
 
 -- ตรวจสอบว่าโมเดลมอนสเตอร์ตัวนี้คือ Escaped Prisoner หรือไม่
 function EscapedPrisoner.IsEscaped(model)
@@ -447,6 +446,17 @@ function EscapedPrisoner.Run(env)
 				break
 			end
 
+			-- [ตรวจสอบเบื้องต้น]: หากไม่เจอมอนที่ทำเควสต์ในเซิร์ฟเวอร์ ให้สลับกลับไปฟาร์มทันที
+			local initTargets = EscapedPrisoner.FindTargets()
+			if #initTargets == 0 then
+				if totalMobsEncountered > 0 then
+					break
+				else
+					EscapedPrisoner.QuestCompleted = false
+					return false
+				end
+			end
+
 			-- ทำวนให้ครบทั้ง 3 จุด
 			for i, point in ipairs(EscapedPrisoner.Points) do
 				if settingsObj.AutoFarm == false then
@@ -637,11 +647,6 @@ function EscapedPrisoner.Handle(env)
 		return false
 	end
 
-	-- 2.1 ตรวจสอบ Cooldown หากรอบที่แล้วไม่เจอม็อบ (รอม็อบเกิดใหม่ ให้กลับไปฟาร์มปกติ)
-	if EscapedPrisoner.NextCheckTick and tick() < EscapedPrisoner.NextCheckTick then
-		return false
-	end
-
 	-- 3. ถ้ากำลังรันเควสต์อยู่แล้ว ให้คืนค่า true เพื่อไม่ให้ฟาร์มปกติแทรก
 	if EscapedPrisoner.Busy then
 		return true
@@ -653,7 +658,14 @@ function EscapedPrisoner.Handle(env)
 		return false
 	end
 
-	-- 5. เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
+	-- 5. ตรวจสอบว่ามีมอนสเตอร์ Escaped Prisoner เกิดอยู่ในเซิร์ฟเวอร์หรือไม่
+	-- หากไม่เจอมอนที่ทำเควสต์ ให้สลับกลับไปฟาร์มมอนตามเลเวลปกติทันที
+	local targets = EscapedPrisoner.FindTargets()
+	if #targets == 0 then
+		return false
+	end
+
+	-- 6. เริ่มต้นรันกระบวนการล่า Escaped Prisoner วน 3 จุด -> ตรวจเช็ค -> ไปหา Jail Keeper
 	local ran = EscapedPrisoner.Run(env)
 
 	return ran == true
